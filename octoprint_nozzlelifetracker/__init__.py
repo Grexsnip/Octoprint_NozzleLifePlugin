@@ -8,6 +8,15 @@ from octoprint.plugin import (
     EventHandlerPlugin,
     SimpleApiPlugin
 )
+import time
+import threading
+import uuid
+from flask import make_response, request
+
+__plugin_name__ = "Nozzle Life Tracker"
+__plugin_version__ = "0.2.4"
+__plugin_pythoncompat__ = ">=3.7,<3.12"
+__plugin_octoprint_version__ = ">=1.9,<2"
 
 class NozzleLifeTrackerPlugin(StartupPlugin,
                               SettingsPlugin,
@@ -92,8 +101,6 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
     ##~~ SimpleApiPlugin (for frontend interaction)
     def is_api_protected(self):
         return True
-
-
 
     def get_api_commands(self):
         return {
