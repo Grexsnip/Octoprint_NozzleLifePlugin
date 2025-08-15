@@ -19,6 +19,7 @@ setup(
     url=plugin_url,
     license=plugin_license,
     packages=[plugin_package],
+    package_data={plugin_package: ['static/**', 'templates/**']},
     include_package_data=True,
     zip_safe=False,
     install_requires=[],
