@@ -1,0 +1,22 @@
+<div id="sidebar_plugin_nozzlelifetracker" class="nozzlelifetracker sidebar-section">
+  <div data-bind="visible: hasData">
+    <strong data-bind="text: nozzleName"></strong><br/>
+    <span data-bind="text: runtimeText"></span><br/>
+
+    <!-- Status Indicator -->
+    <div data-bind="if: displayMode() === 'circle' || displayMode() === 'both'">
+      <span class="status-indicator" data-bind="style: { backgroundColor: statusColor }"></span>
+    </div>
+
+    <div data-bind="if: displayMode() === 'bar' || displayMode() === 'both'">
+      <div class="progress">
+        <div class="progress-bar" role="progressbar"
+             data-bind="style: { width: progressPercent }, css: progressBarClass"></div>
+      </div>
+    </div>
+  </div>
+
+  <div data-bind="visible: !hasData()">
+    <em>No nozzle selected</em>
+  </div>
+</div>

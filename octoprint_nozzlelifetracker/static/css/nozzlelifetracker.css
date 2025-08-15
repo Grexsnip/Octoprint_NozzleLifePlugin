@@ -1,0 +1,53 @@
+.status-indicator {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+.progress {
+  height: 10px;
+  margin-top: 5px;
+  background-color: #ddd;
+}
+
+.progress-bar {
+  height: 100%;
+  transition: width 0.3s ease-in-out;
+}
+
+.progress-bar-success {
+  background-color: #5cb85c;
+}
+
+.progress-bar-warning {
+  background-color: #f0ad4e;
+}
+
+.progress-bar-danger {
+  background-color: #d9534f;
+}
+
+.nozzlelifetracker table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.nozzlelifetracker td,
+.nozzlelifetracker th {
+  padding: 6px 10px;
+  border-bottom: 1px solid #ddd;
+}
+
+.nozzlelifetracker input[type="text"],
+.nozzlelifetracker input[type="number"] {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.nozzlelifetracker .retired {
+  color: #aaa;
+  font-style: italic;
+}

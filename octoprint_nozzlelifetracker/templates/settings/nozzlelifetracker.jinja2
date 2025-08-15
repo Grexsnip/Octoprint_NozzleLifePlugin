@@ -1,0 +1,46 @@
+<div id="settings_plugin_nozzlelifetracker" class="nozzlelifetracker section">
+  <h3>Nozzle Manager</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Size</th>
+        <th>Material</th>
+        <th>Expected Life (h)</th>
+        <th>Runtime (h)</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody data-bind="foreach: nozzles">
+      <tr data-bind="css: { retired: retired }">
+        <td><input data-bind="value: name" type="text" /></td>
+        <td data-bind="text: size"></td>
+        <td data-bind="text: material"></td>
+        <td><input type="number" min="0" step="0.1" data-bind="value: expected_life" /></td>
+        <td data-bind="text: runtime.toFixed(2)"></td>
+        <td>
+          <button data-bind="click: $parent.setDefault, enable: !retired()">Set Default</button>
+          <button data-bind="click: $parent.confirmRetire, enable: !retired()">Retire</button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Plugin Settings</h3>
+  <label>
+    <input type="checkbox" data-bind="checked: promptBeforePrint" />
+    Prompt before each print
+  </label>
+  <br/>
+  <label>
+    Status Display:
+    <select data-bind="value: displayModeSetting">
+      <option value="circle">Circle</option>
+      <option value="bar">Bar</option>
+      <option value="both">Both</option>
+    </select>
+  </label>
+
+  <h3>Print Log</h3>
+  <button class="btn btn-primary" data-bind="click: exportLog">Export CSV</button>
+</div>

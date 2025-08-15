@@ -1,0 +1,29 @@
+plugin:
+  key: nozzlelifetracker
+  name: Nozzle Life Tracker
+  version: 0.2.4
+  description: Tracks nozzle usage time and displays wear status.
+  author: Andy Rabin
+  license: AGPLv3
+  homepage: https://github.com/Grexsnip/Octoprint_NozzleLifePlugin
+  update:
+    type: github_release
+    user: andyrabin
+    repo: OctoPrint-NozzleLifeTracker
+    current: 0.2.4
+
+  packages:
+    - octoprint_nozzlelifetracker
+
+  template:
+    settings: true
+    sidebar: true
+
+  assets:
+    js:
+      - js/nozzlelifetracker.js
+    css:
+      - css/nozzlelifetracker.css
+
+  python:
+    compatible: ">=3.7,<3.12"
