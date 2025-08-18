@@ -12,6 +12,7 @@ import time
 import threading
 import uuid
 from flask import make_response, request
+import csv
 
 __plugin_name__ = "Nozzle Life Tracker"
 __plugin_version__ = "0.2.4"
@@ -50,7 +51,7 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         }
 
     def on_settings_save(self, data):
-        octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
+        SettingsPlugin.on_settings_save(self, data)
         self._load_nozzles()
 
     ##~~ AssetPlugin
@@ -163,7 +164,7 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             return {"success": True, "nozzle_id": nozzle_id, "name": default_name}
 
         elif command == "export_log_csv":
-            output = flask.make_response(self._generate_csv())
+            output = make_response(self._generate_csv())
             output.headers["Content-Disposition"] = "attachment; filename=nozzle_log.csv"
             output.headers["Content-type"] = "text/csv"
             return output
