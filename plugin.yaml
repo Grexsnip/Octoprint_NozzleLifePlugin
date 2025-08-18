@@ -1,7 +1,7 @@
 plugin:
   key: nozzlelifetracker
   name: Nozzle Life Tracker
-  version: 0.2.4
+  version: 0.2.5
   description: Tracks nozzle usage time and displays wear status.
   author: Andy Rabin
   license: AGPLv3
@@ -10,7 +10,7 @@ plugin:
     type: github_release
     user: andyrabin
     repo: OctoPrint-NozzleLifeTracker
-    current: 0.2.4
+    current: 0.2.5
 
   packages:
     - octoprint_nozzlelifetracker
