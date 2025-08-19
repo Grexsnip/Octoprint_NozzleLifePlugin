@@ -11,13 +11,15 @@ $(function() {
         self.statusColor = ko.observable("gray");
         self.progressPercent = ko.observable("0%");
         self.progressBarClass = ko.observable("progress-bar-success");
+        // Option A: computed from nozzles (read-only; do not write to it)
+        // We define nozzles first, then compute hasData from it.
+
+        // Settings observables
+        self.nozzles = ko.observableArray([]);
         self.hasData = ko.pureComputed(function () {
             var list = self.nozzles() || [];
             return list.length > 0;
         });
-
-        // Settings observables
-        self.nozzles = ko.observableArray([]);
         self.currentNozzle  = ko.observable(null);
         self.displayModeSetting = ko.observable("circle");
         self.promptBeforePrint = ko.observable(false);
@@ -51,7 +53,6 @@ $(function() {
                 }
 
                 self.progressPercent(percentUsed.toFixed(0) + "%");
-                self.hasData(true);
             });
         };
 
@@ -70,6 +71,23 @@ $(function() {
                 self.displayModeSetting(data.display_mode || "circle");
             });
         }; */
+        self.loadSettings = function() {
+            // Read settings from the injected settingsViewModel
+            var p = self.settingsViewModel.settings.plugins.nozzlelifetracker;
+            var data = {
+                nozzles: ko.unwrap(p.nozzles) || {},
+                prompt_before_print: ko.unwrap(p.prompt_before_print),
+                display_mode: ko.unwrap(p.display_mode) || "circle"
+            };
+            self.nozzles(
+                Object.entries(data.nozzles).map(([id, obj]) => {
+                    obj.id = id;
+                    return obj;
+                }).sort((a, b) => a.retired - b.retired) // active first
+                );
+            self.promptBeforePrint(!!data.prompt_before_print);
+            self.displayModeSetting(data.display_mode);
+        };
 
         self.setDefault = function(nozzle) {
             OctoPrint.settings.savePluginConfig("nozzlelifetracker", {
@@ -108,6 +126,7 @@ $(function() {
         ]
     });
 });
+
 
 
 
