@@ -56,7 +56,7 @@ $(function() {
         self.updateStatus();
 
         // Settings logic
-        self.loadSettings = function() {
+        /* self.loadSettings = function() {
             OctoPrint.settings.getPluginConfigData("nozzlelifetracker", function(data) {
                 self.nozzles(Object.entries(data.nozzles || {}).map(([id, obj]) => {
                     obj.id = id;
@@ -65,7 +65,7 @@ $(function() {
                 self.promptBeforePrint(data.prompt_before_print || false);
                 self.displayModeSetting(data.display_mode || "circle");
             });
-        };
+        }; */
 
         self.setDefault = function(nozzle) {
             OctoPrint.settings.savePluginConfig("nozzlelifetracker", {
@@ -86,7 +86,11 @@ $(function() {
         };
 
         self.onBeforeBinding = function() {
-            self.loadSettings();
+            var p = self.settingsViewModel.settings.plugins.nozzlelifetracker;
+            // Use safe fallbacks in case a key is undefined on first run
+            self.displayMode( ko.unwrap(p.display_mode) || "runtime" );
+            self.nozzles(     ko.unwrap(p.nozzles)      || [] );
+            self.currentNozzle( ko.unwrap(p.current_nozzle) || null );
         };
     }
 
@@ -100,5 +104,6 @@ $(function() {
         ]
     });
 });
+
 
 
