@@ -54,25 +54,6 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         SettingsPlugin.on_settings_save(self, data)
         self._load_nozzles()
 
-    ##~~ AssetPlugin
-
-    """                              
-    def get_assets(self):
-        return {
-            "js": ["js/nozzlelifetracker.js"],
-            "css": ["css/nozzlelifetracker.css"],
-            "less": ["less/nozzlelifetracker.less"]
-        }
-
-    ##~~ TemplatePlugin
-
-    def get_template_configs(self):
-        return [
-            dict(type="settings", custom_bindings=False),
-            dict(type="sidebar", name="Nozzle Life")
-        ]
-    """
-
     ##~~ EventHandlerPlugin
 
     def on_event(self, event, payload):
