@@ -7,14 +7,18 @@ $(function() {
         // Sidebar observables
         self.nozzleName = ko.observable("Unknown");
         self.runtimeText = ko.observable("0h used");
-        self.displayMode = ko.observable("circle");
+        self.displayMode = ko.observable('runtime');
         self.statusColor = ko.observable("gray");
         self.progressPercent = ko.observable("0%");
         self.progressBarClass = ko.observable("progress-bar-success");
-        self.hasData = ko.observable(false);
+        self.hasData = ko.pureComputed(function () {
+            var list = self.nozzles() || [];
+            return list.length > 0;
+        });
 
         // Settings observables
         self.nozzles = ko.observableArray([]);
+        self.currentNozzle  = ko.observable(null);
         self.displayModeSetting = ko.observable("circle");
         self.promptBeforePrint = ko.observable(false);
 
@@ -104,6 +108,7 @@ $(function() {
         ]
     });
 });
+
 
 
 
