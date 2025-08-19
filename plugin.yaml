@@ -24,6 +24,8 @@ plugin:
       - js/nozzlelifetracker.js
     css:
       - css/nozzlelifetracker.css
+    less:
+      - less/nozzlelifetracker.less
 
   python:
     compatible: ">=3.7,<3.12"
