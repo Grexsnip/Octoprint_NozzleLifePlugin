@@ -90,6 +90,7 @@ $(function() {
     }
 
     OCTOPRINT_VIEWMODELS.push({
+        name: "nozzlelifetracker",
         construct: NozzleLifeTrackerViewModel,
         dependencies: ["loginStateViewModel", "settingsViewModel"],
         elements: [
@@ -98,3 +99,4 @@ $(function() {
         ]
     });
 });
+
