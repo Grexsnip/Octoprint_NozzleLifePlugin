@@ -56,6 +56,7 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
 
     ##~~ AssetPlugin
 
+    """                              
     def get_assets(self):
         return {
             "js": ["js/nozzlelifetracker.js"],
@@ -70,6 +71,7 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             dict(type="settings", custom_bindings=False),
             dict(type="sidebar", name="Nozzle Life")
         ]
+    """
 
     ##~~ EventHandlerPlugin
 
