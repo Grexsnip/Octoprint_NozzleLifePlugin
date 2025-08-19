@@ -2,6 +2,7 @@ $(function() {
     function NozzleLifeTrackerViewModel(parameters) {
         var self = this;
         self.loginStateViewModel = parameters[0];
+        self.settingsViewModel   = parameters[1];
 
         // Sidebar observables
         self.nozzleName = ko.observable("Unknown");
@@ -99,4 +100,5 @@ $(function() {
         ]
     });
 });
+
 
