@@ -109,9 +109,16 @@ $(function() {
 
         self.onBeforeBinding = function() {
             var p = self.settingsViewModel.settings.plugins.nozzlelifetracker;
+
+            var nozzleMap = ko.unwrap(p.nozzles) ||{};
+            var arr = Object.entries(nozzleMap).map(function([id,obj]) {
+                obj.id = id;
+                return obj;
+            }).sort(function(a, b) { return a.retired - b.retired; });
+            
             // Use safe fallbacks in case a key is undefined on first run
-            self.displayMode( ko.unwrap(p.display_mode) || "runtime" );
-            self.nozzles(     ko.unwrap(p.nozzles)      || [] );
+            self.displayMode(ko.unwrap(p.display_mode) || "runtime" );
+            self.nozzles(arr);
             self.currentNozzle( ko.unwrap(p.current_nozzle) || null );
         };
     }
@@ -126,6 +133,7 @@ $(function() {
         ]
     });
 });
+
 
 
 
