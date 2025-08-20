@@ -6,8 +6,8 @@ plugin_name = "Nozzle Life Tracker"
 plugin_version = "0.2.6"
 plugin_description = "Tracks nozzle usage time and displays wear status."
 plugin_author = "Andy Rabin"
-plugin_author_email = "you@example.com"
-plugin_url = "https://github.com/yourname/OctoPrint-NozzleLifeTracker"
+plugin_author_email = "andy.rabin@gmail.com"
+plugin_url = "https://github.com/Grexsnip/OctoPrint-NozzleLifeTracker"
 plugin_license = "AGPLv3"
 
 setup(
@@ -19,7 +19,18 @@ setup(
     url=plugin_url,
     license=plugin_license,
     packages=[plugin_package],
-    package_data={plugin_package: ['static/**', 'templates/**']},
+    package_data={
+        plugin_package: [
+            "plugin.yaml",
+            "templates/*.jinja2",
+            "templates/settings/*.jinja2",
+            "templates/sidebar/*.jinja2",
+            "static/js/*.js",
+            "static/css/*.css",
+            "static/less/*.less",
+            "translation/*.*",
+        ]
+    },
     include_package_data=True,
     zip_safe=False,
     install_requires=[],
