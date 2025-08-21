@@ -15,9 +15,9 @@ plugin:
   packages:
     - octoprint_nozzlelifetracker
 
-  template:
-    settings: true
-    sidebar: true
+#  template:
+#    settings: true
+#    sidebar: true
 
   assets:
     js:
