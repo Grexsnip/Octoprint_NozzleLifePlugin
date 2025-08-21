@@ -1,6 +1,7 @@
 $(function() {
     function NozzleLifeTrackerViewModel(parameters) {
         var self = this;
+        console.log("[NLT] VM construct");
         self.loginStateViewModel = parameters[0];
         self.settingsViewModel   = parameters[1];
 
@@ -108,7 +109,18 @@ $(function() {
         };
 
         self.onBeforeBinding = function() {
-            var p = self.settingsViewModel.settings.plugins.nozzlelifetracker;
+            console.log("[NLT] onBeforeBinding start");
+            var s = self.settingsViewModel && self.settingsViewModel.settings;
+            var p = s && s.plugins && s.plugins.nozzlelifetracker;
+            if (!p) {
+                console.warn("[NLT] settingsViewModel.plugins.nozzlelifetracker is missing");
+                // keep safe defaults so KO binding still succeeds
+                self.displayMode("runtime");
+                self.nozzles([]);
+                self.currentNozzle(null);
+                console.log("[NLT] onBeforeBinding end (missing settings)");
+                return;
+            }
 
             var nozzleMap = ko.unwrap(p.nozzles) ||{};
             var arr = Object.entries(nozzleMap).map(function([id,obj]) {
@@ -120,6 +132,11 @@ $(function() {
             self.displayMode(ko.unwrap(p.display_mode) || "runtime" );
             self.nozzles(arr);
             self.currentNozzle( ko.unwrap(p.current_nozzle) || null );
+            console.log("[NLT] onBeforeBinding end", {
+                displayMode: self.displayMode(),
+                nozzles_len: self.nozzles().length,
+                currentNozzle: self.currentNozzle()
+            });
         };
     }
 
@@ -137,8 +154,10 @@ $(function() {
                 "#settings_plugin_nozzlelifetracker"
             ]
         });
+        console.log("[NLT] VM registered");
     }
 });
+
 
 
 
