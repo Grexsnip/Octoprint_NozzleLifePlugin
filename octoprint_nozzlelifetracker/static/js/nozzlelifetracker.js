@@ -123,6 +123,11 @@ $(function() {
         };
     }
 
+if (window.__nlt_vm_pushed) {
+    console.warn("[NozzleLifeTracker] ViewModel already registered, skipping second push.");
+} else {
+    window.__nlt_vm_pushed) = true;
+    
     OCTOPRINT_VIEWMODELS.push({
         name: "nozzlelifetracker",
         construct: NozzleLifeTrackerViewModel,
@@ -133,6 +138,7 @@ $(function() {
         ]
     });
 });
+
 
 
 
