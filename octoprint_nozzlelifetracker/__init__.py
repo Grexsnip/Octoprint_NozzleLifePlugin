@@ -54,6 +54,20 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         SettingsPlugin.on_settings_save(self, data)
         self._load_nozzles()
 
+    def get_template_configs(self):
+        # Explicit template mapping; forces OctoPrint to inject both panes
+        return [
+            dict(type="settings",
+                 name="Nozzle Life",
+                 template="nozzlelifetracker",
+                 custom_bindings=False),
+            dict(type="sidebar",
+                 name="Nozzle Life",
+                 template="nozzlelifetracker",
+                 custom_bindings=False),
+        ]
+
+
     ##~~ EventHandlerPlugin
 
     def on_event(self, event, payload):
