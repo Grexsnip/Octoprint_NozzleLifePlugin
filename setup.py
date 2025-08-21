@@ -28,7 +28,7 @@ setup(
             "static/js/*.js",
             "static/css/*.css",
             "static/less/*.less",
-            "translation/*.*",
+            "translations/*.*",
         ]
     },
     include_package_data=True,
