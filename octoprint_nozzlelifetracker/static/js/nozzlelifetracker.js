@@ -104,6 +104,24 @@ $(function() {
             }
         };
 
+        self.onAllBound = function() {
+            console.log("[NLT] onAllBound fired");
+            // Bind exactly once, when the DOM and all VMs are ready
+            var targets = [
+                document.getElementById("settings_plugin_nozzlelifetracker_content"),
+                document.getElementById("sidebar_plugin_nozzlelifetracker_content")
+                ];
+            targets.forEach(function(node) {
+                if (node && !ko.dataFor(node)) {
+                    ko.applyBindings(self, node);
+                }
+            };
+            console.log("[NLT] manual bound", {
+                settings: !!targets[0],
+                sidebar: !!targets[1]
+            });
+        };
+
         self.exportLog = function() {
             window.location.href = API_BASEURL + "plugin/nozzlelifetracker?command=export_log_csv";
         };
@@ -149,14 +167,12 @@ $(function() {
             name: "nozzlelifetracker",
             construct: NozzleLifeTrackerViewModel,
             dependencies: ["loginStateViewModel", "settingsViewModel"],
-            elements: [
-                "#sidebar_plugin_nozzlelifetracker",
-                "#settings_plugin_nozzlelifetracker"
-            ]
+            elements: []
         });
         console.log("[NLT] VM registered");
     }
 });
+
 
 
 
