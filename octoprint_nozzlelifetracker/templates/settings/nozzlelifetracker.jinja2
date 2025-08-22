@@ -1,11 +1,23 @@
 <div id="settings_plugin_nozzlelifetracker" class="nozzlelifetracker section">
-    <div style="font-size:11px; opacity:0.7; margin-bottom:6px;">
-    <strong>NLT Sidebar:</strong>
-    <span data-bind="text: nozzleName"></span>
-    —
-    <span data-bind="text: runtimeText"></span>
+<div style="font-size:11px; opacity:0.7; margin-bottom:8px;">
+  <strong>NLT Settings:</strong>
+  <span data-bind="text: displayModeSetting"></span>,
+  Nozzles: <span data-bind="text: (nozzles() && nozzles().length) || 0"></span>
 </div>
-<div data-bind="visible: !hasData()">No nozzles yet.</div>
+
+<!-- Minimal table to visualize data -->
+<table class="table table-condensed">
+  <thead>
+    <tr><th>Name</th><th>Retired?</th></tr>
+  </thead>
+  <tbody data-bind="foreach: nozzles">
+    <tr>
+      <td data-bind="text: name || id"></td>
+      <td data-bind="text: retired ? 'Yes' : 'No'"></td>
+    </tr>
+  </tbody>
+</table>
+
 <div data-bind="visible: hasData()">
   <h3>Nozzle Manager</h3>
   <table>
@@ -52,6 +64,7 @@
   <h3>Print Log</h3>
   <button class="btn btn-primary" data-bind="click: exportLog">Export CSV</button>
 </div>
+
 
 
 
