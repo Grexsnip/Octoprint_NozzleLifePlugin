@@ -115,7 +115,7 @@ $(function() {
                 if (node && !ko.dataFor(node)) {
                     ko.applyBindings(self, node);
                 }
-            };
+            });
             console.log("[NLT] manual bound", {
                 settings: !!targets[0],
                 sidebar: !!targets[1]
@@ -172,6 +172,7 @@ $(function() {
         console.log("[NLT] VM registered");
     }
 });
+
 
 
 
