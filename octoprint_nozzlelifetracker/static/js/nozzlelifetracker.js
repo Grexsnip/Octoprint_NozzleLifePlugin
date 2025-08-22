@@ -106,20 +106,49 @@ $(function() {
 
         self.onAllBound = function() {
             console.log("[NLT] onAllBound fired");
-            // Bind exactly once, when the DOM and all VMs are ready
-            var targets = [
-                document.getElementById("settings_plugin_nozzlelifetracker_content"),
-                document.getElementById("sidebar_plugin_nozzlelifetracker_content")
-                ];
-            targets.forEach(function(node) {
-                if (node && !ko.dataFor(node)) {
-                    ko.applyBindings(self, node);
+            
+            // Try immediately (sidebar may already be there)
+            bindTargetsOnce();// Bind exactly once, when the DOM and all VMs are ready
+            
+            // Bind when Settings dialog is shown (OctoPrint injects its DOM on open)
+            $("#settings_dialog").on("shown.bs.modal", function () {
+                bindTargetsOnce();
+            });
+
+            // As a belt-and-suspenders: observe for late-inserted nodes, then stop
+            var mo = new MutationObserver(function () {
+                bindTargetsOnce();
+                var s = document.getElementById("settings_plugin_nozzlelifetracker_content");
+                var b = document.getElementById("sidebar_plugin_nozzlelifetracker_content");
+                if (s && ko.dataFor(s) && b && ko.dataFor(b)) {
+                    mo.disconnect();
                 }
             });
-            console.log("[NLT] manual bound", {
-                settings: !!targets[0],
-                sidebar: !!targets[1]
+            mo.observe(document.body, { childList: true, subtree: true });
+
+            // Also try once more after the current tick
+            setTimeout(bindTargetsOnce, 0);
+        };
+
+        function bindTargetsOnce() {
+            var nodes = [
+                document.getElementById("settings_plugin_nozzlelifetracker_content"),
+                document.getElementById("sidebar_plugin_nozzlelifetracker_content")
+            ].filter(Boolean);
+
+            var didBind = false;
+            nodes.forEach(function (node) {
+                if (node && !ko.dataFor(node)) {
+                    ko.applyBindings(self, node);
+                    didBind = true;
+                }
             });
+            if (didBind) {
+                console.log("[NLT] manual bound (now)", {
+                    settings: !!document.getElementById("settings_plugin_nozzlelifetracker_content"),
+                    sidebar: !!document.getElementById("sidebar_plugin_nozzlelifetracker_content")
+                });
+            }
         };
 
         self.exportLog = function() {
@@ -172,6 +201,7 @@ $(function() {
         console.log("[NLT] VM registered");
     }
 });
+
 
 
 
