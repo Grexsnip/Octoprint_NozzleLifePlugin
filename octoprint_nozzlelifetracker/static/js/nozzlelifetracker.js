@@ -150,13 +150,14 @@ $(function() {
             construct: NozzleLifeTrackerViewModel,
             dependencies: ["loginStateViewModel", "settingsViewModel"],
             elements: [
-                "#sidebar_plugin_nozzlelifetracker_content",
-                "#settings_plugin_nozzlelifetracker_content"
+                "#sidebar_plugin_nozzlelifetracker",
+                "#settings_plugin_nozzlelifetracker"
             ]
         });
         console.log("[NLT] VM registered");
     }
 });
+
 
 
 
