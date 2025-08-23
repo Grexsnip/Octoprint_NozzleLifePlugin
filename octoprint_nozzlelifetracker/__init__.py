@@ -59,11 +59,11 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         return [
             dict(type="settings",
                  name="Nozzle Life",
-                 template="nozzlelifetracker",
+                 template="nozzlelifetracker_settings",
                  custom_bindings=True),
             dict(type="sidebar",
                  name="Nozzle Life",
-                 template="nozzlelifetracker",
+                 template="nozzlelifetracker_sidebar",
                  custom_bindings=True),
         ]
 
