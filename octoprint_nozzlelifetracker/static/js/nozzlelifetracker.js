@@ -141,10 +141,17 @@ $(function() {
         };
 
         function bindTargetsOnce() {
-            var nodes = [
-                document.getElementById("settings_plugin_nozzlelifetracker_content"),
-                document.getElementById("sidebar_plugin_nozzlelifetracker_content")
-            ].filter(Boolean);
+            // Prefer *_content nodes; fall back to root wrappers if the content
+            // wrapper hasn't been injected yet.
+            var settingNode =
+                document.getElementById("settings_plugin_nozzlelifetracker_content") ||
+                document.getElementById("settings_plugin_nozzlelifetracker");
+
+            var sidebarNode =
+                document.getElementById("sidebar_plugin_nozzlelifetracker_content")  ||
+                document.getElementById("sidebar_plugin_nozzlelifetracker");
+            
+            var nodes = [settingsNode, sidebarNode].filter(Boolean);
 
             var didBind = false;
             nodes.forEach(function (node) {
@@ -155,8 +162,8 @@ $(function() {
             });
             if (didBind) {
                 console.log("[NLT] manual bound (now)", {
-                    settings: !!document.getElementById("settings_plugin_nozzlelifetracker_content"),
-                    sidebar: !!document.getElementById("sidebar_plugin_nozzlelifetracker_content")
+                    settings: !!settingsNode,
+                    sidebar: !!sidebarNode
                 });
             }
         };
@@ -211,4 +218,5 @@ $(function() {
         console.log("[NLT] VM registered");
     }
 });
+
 
