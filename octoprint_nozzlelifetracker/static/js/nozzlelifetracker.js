@@ -145,7 +145,7 @@ $(function() {
         function bindTargetsOnce() {
             // Prefer *_content nodes; fall back to root wrappers if the content
             // wrapper hasn't been injected yet.
-            var settingNode =
+            var settingsNode =
                 document.getElementById("settings_plugin_nozzlelifetracker_content") ||
                 document.getElementById("settings_plugin_nozzlelifetracker");
 
@@ -220,6 +220,7 @@ $(function() {
         console.log("[NLT] VM registered");
     }
 });
+
 
 
 
