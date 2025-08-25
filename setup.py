@@ -3,7 +3,7 @@ from setuptools import setup
 plugin_identifier = "nozzlelifetracker"
 plugin_package = "octoprint_nozzlelifetracker"
 plugin_name = "Nozzle Life Tracker"
-plugin_version = "0.2.6"
+plugin_version = "0.2.7"
 plugin_description = "Tracks nozzle usage time and displays wear status."
 plugin_author = "Andy Rabin"
 plugin_author_email = "andy.rabin@gmail.com"
@@ -18,7 +18,7 @@ setup(
     author_email=plugin_author_email,
     url=plugin_url,
     license=plugin_license,
-    packages=[plugin_package],
+    packages=find_packages(exclude=("tests", "dev*", "build*", "dist*")),
     package_data={
         plugin_package: [
             "plugin.yaml",
@@ -34,7 +34,7 @@ setup(
     include_package_data=True,
     zip_safe=False,
     install_requires=[],
-    python_requires=">=3.7,<3.12",
+    python_requires=">=3.8,<3.12",
     entry_points={
         "octoprint.plugin": [
             f"{plugin_identifier} = {plugin_package}"
