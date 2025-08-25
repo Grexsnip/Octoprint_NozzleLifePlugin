@@ -126,8 +126,18 @@ $(function() {
             });
             mo.observe(document.body, { childList: true, subtree: true });
 
-            // Also try once more after the current tick
-            setTimeout(bindTargetsOnce, 0);
+            // Short retry loop to catch late insertion in the first seconds
+            var tries = 0;
+            var t = setInterval(function () {
+                bindTargetsOnce();
+                var s = document.getElementById("settings_plugin_nozzlelifetracker_content");
+                var b = document.getElementById("sidebar_plugin_nozzlelifetracker_content");
+                if ((s && ko.dataFor(s)) && (b && ko.dataFor(b))) {
+                    clearInterval(t);
+                } else if (++tries >= 40) { //~8s at 200ms
+                    clearinterval(t);
+                }
+            }, 200);
         };
 
         function bindTargetsOnce() {
@@ -201,18 +211,3 @@ $(function() {
         console.log("[NLT] VM registered");
     }
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
