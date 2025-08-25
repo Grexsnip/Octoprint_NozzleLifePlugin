@@ -118,8 +118,10 @@ $(function() {
             // As a belt-and-suspenders: observe for late-inserted nodes, then stop
             var mo = new MutationObserver(function () {
                 bindTargetsOnce();
-                var s = document.getElementById("settings_plugin_nozzlelifetracker_content");
-                var b = document.getElementById("sidebar_plugin_nozzlelifetracker_content");
+                var s = document.getElementById("settings_plugin_nozzlelifetracker_content") ||
+                    document.getElementById("settings_plugin_nozzlelifetracker");
+                var b = document.getElementById("sidebar_plugin_nozzlelifetracker_content") ||
+                    document.getElementById("sidebar_plugin_nozzlelifetracker");
                 if (s && ko.dataFor(s) && b && ko.dataFor(b)) {
                     mo.disconnect();
                 }
@@ -218,5 +220,6 @@ $(function() {
         console.log("[NLT] VM registered");
     }
 });
+
 
 
