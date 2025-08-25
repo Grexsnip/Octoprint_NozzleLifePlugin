@@ -135,7 +135,7 @@ $(function() {
                 if ((s && ko.dataFor(s)) && (b && ko.dataFor(b))) {
                     clearInterval(t);
                 } else if (++tries >= 40) { //~8s at 200ms
-                    clearinterval(t);
+                    clearInterval(t);
                 }
             }, 200);
         };
@@ -211,3 +211,4 @@ $(function() {
         console.log("[NLT] VM registered");
     }
 });
+
