@@ -8,7 +8,7 @@
   <span data-bind="text: runtimeText"></span>
   </div>
   <div data-bind="visible: !hasData()">No nozzles yet.</div>
-  <div data-bind="visible: hasData">
+  <div data-bind="visible: hasData()">
     <strong data-bind="text: nozzleName"></strong><br/>
     <span data-bind="text: runtimeText"></span><br/>
 
@@ -30,6 +30,7 @@
   </div>
 </div>
 </div>
+
 
 
 
