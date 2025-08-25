@@ -8,6 +8,6 @@ plugin:
   homepage: https://github.com/Grexsnip/Octoprint_NozzleLifePlugin
   update:
     type: github_release
-    user: andyrabin
+    user: Grexsnip
     repo: OctoPrint-NozzleLifeTracker
     current: 0.2.7
