@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 plugin_identifier = "nozzlelifetracker"
 plugin_package = "octoprint_nozzlelifetracker"
