@@ -89,6 +89,7 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
                     elapsed = (time.time() - self._print_start_time) / 3600.0
                     nozzle_id = self._current_nozzle
                     if nozzle_id in self._nozzles:
+                        self._nozzles[nozzle_id].setdefault("runtime", 0.0)
                         self._nozzles[nozzle_id]['runtime'] += elapsed
 
                     log_entry = {
