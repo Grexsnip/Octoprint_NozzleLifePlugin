@@ -108,12 +108,12 @@ $(function() {
             console.log("[NLT] onAllBound fired");
             
             // Try immediately (sidebar may already be there)
-            bindTargetsOnce();// Bind exactly once, when the DOM and all VMs are ready
+            //bindTargetsOnce();// Bind exactly once, when the DOM and all VMs are ready
             
             // Bind when Settings dialog is shown (OctoPrint injects its DOM on open)
-            $("#settings_dialog").on("shown.bs.modal", function () {
-                bindTargetsOnce();
-            });
+            //$("#settings_dialog").on("shown.bs.modal", function () {
+            //    bindTargetsOnce();
+            //});
 
             // As a belt-and-suspenders: observe for late-inserted nodes, then stop
             var mo = new MutationObserver(function () {
@@ -129,17 +129,17 @@ $(function() {
             mo.observe(document.body, { childList: true, subtree: true });
 
             // Short retry loop to catch late insertion in the first seconds
-            var tries = 0;
-            var t = setInterval(function () {
-                bindTargetsOnce();
-                var s = document.getElementById("settings_plugin_nozzlelifetracker_content");
-                var b = document.getElementById("sidebar_plugin_nozzlelifetracker_content");
-                if ((s && ko.dataFor(s)) && (b && ko.dataFor(b))) {
-                    clearInterval(t);
-                } else if (++tries >= 40) { //~8s at 200ms
-                    clearInterval(t);
-                }
-            }, 200);
+            //var tries = 0;
+            //var t = setInterval(function () {
+            //    bindTargetsOnce();
+            //    var s = document.getElementById("settings_plugin_nozzlelifetracker_content");
+            //    var b = document.getElementById("sidebar_plugin_nozzlelifetracker_content");
+            //    if ((s && ko.dataFor(s)) && (b && ko.dataFor(b))) {
+            //        clearInterval(t);
+            //    } else if (++tries >= 40) { //~8s at 200ms
+            //        clearInterval(t);
+            //    }
+            //}, 200);
         };
 
         function bindTargetsOnce() {
@@ -215,11 +215,12 @@ $(function() {
             name: "nozzlelifetracker",
             construct: NozzleLifeTrackerViewModel,
             dependencies: ["loginStateViewModel", "settingsViewModel"],
-            elements: []
+            elements: ["#settings_plugin_nozzlelifetracker", "#sidebar_plugin_nozzlelifetracker"]
         });
         console.log("[NLT] VM registered");
     }
 });
+
 
 
 
