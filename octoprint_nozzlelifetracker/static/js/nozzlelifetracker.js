@@ -116,7 +116,7 @@ $(function() {
             //});
 
             // As a belt-and-suspenders: observe for late-inserted nodes, then stop
-            var mo = new MutationObserver(function () {
+            /*var mo = new MutationObserver(function () {
                 bindTargetsOnce();
                 var s = document.getElementById("settings_plugin_nozzlelifetracker_content") ||
                     document.getElementById("settings_plugin_nozzlelifetracker");
@@ -126,7 +126,7 @@ $(function() {
                     mo.disconnect();
                 }
             });
-            mo.observe(document.body, { childList: true, subtree: true });
+            mo.observe(document.body, { childList: true, subtree: true });*/
 
             // Short retry loop to catch late insertion in the first seconds
             //var tries = 0;
@@ -142,7 +142,7 @@ $(function() {
             //}, 200);
         };
 
-        function bindTargetsOnce() {
+        /*function bindTargetsOnce() {
             // Prefer *_content nodes; fall back to root wrappers if the content
             // wrapper hasn't been injected yet.
             var settingsNode =
@@ -168,7 +168,7 @@ $(function() {
                     sidebar: !!sidebarNode
                 });
             }
-        };
+        };*/
 
         self.exportLog = function() {
             window.location.href = API_BASEURL + "plugin/nozzlelifetracker?command=export_log_csv";
@@ -220,6 +220,7 @@ $(function() {
         console.log("[NLT] VM registered");
     }
 });
+
 
 
 
