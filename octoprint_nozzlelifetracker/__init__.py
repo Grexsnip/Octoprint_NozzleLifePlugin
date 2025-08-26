@@ -109,6 +109,14 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
     def is_api_protected(self):
         return True
 
+    def on_api_get(self, request):
+        if request.values.get("command") == "export_log_csv":
+            output = make_response(self._generate_csv())
+            output.headers["Content-Disposition"] = "attachment; filename=nozzle_log.csv"
+            output.headers["Content-type"] = "text/csv"
+            return output
+        return make_response("Unknown command", 400)
+
     def get_api_commands(self):
         return {
             "select_nozzle": ["nozzle_id"],
