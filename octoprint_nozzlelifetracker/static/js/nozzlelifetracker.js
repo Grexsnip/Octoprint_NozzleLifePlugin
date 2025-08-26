@@ -62,7 +62,7 @@ $(function() {
                 self.nozzles(Object.entries(data.nozzles || {}).map(([id, obj]) => {
                     obj.id = id;
                     return obj;
-                }).sort((a, b) => a.retired - b.retired));  // Active first
+                }).sort((a, b) => (a.retired===b.retired)?0:(a.retired?1:-1));  // Active first
                 self.promptBeforePrint(data.prompt_before_print || false);
                 self.displayModeSetting(data.display_mode || "circle");
             });
@@ -79,7 +79,7 @@ $(function() {
                 Object.entries(data.nozzles).map(([id, obj]) => {
                     obj.id = id;
                     return obj;
-                }).sort((a, b) => a.retired - b.retired) // active first
+                }).sort((a, b) => (a.retired===b.retired)?0:(a.retired?1:-1)) // active first
                 );
             self.promptBeforePrint(!!data.prompt_before_print);
             self.displayModeSetting(data.display_mode);
@@ -215,6 +215,7 @@ $(function() {
         console.log("[NLT] VM registered");
     }
 });
+
 
 
 
