@@ -27,13 +27,8 @@ $(function() {
 
         // Update sidebar status
         self.updateStatus = function() {
-            $.ajax({
-                url: API_BASEURL + "plugin/nozzlelifetracker",
-                type: "POST",
-                dataType: "json",
-                data: JSON.stringify({ command: "get_status" }),
-                contentType: "application/json"
-            }).done(function(response) {
+            OctoPrint.simpleApiCommand("nozzlelifetracker", "get_status", {})
+            .done(function(response) {
                 const runtime = response.runtime || 0;
                 const expected = response.expected || 1;
                 const percentUsed = Math.min(100, (runtime / expected) * 100);
@@ -220,6 +215,7 @@ $(function() {
         console.log("[NLT] VM registered");
     }
 });
+
 
 
 
