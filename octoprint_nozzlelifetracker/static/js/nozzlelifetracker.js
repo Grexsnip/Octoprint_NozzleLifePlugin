@@ -88,7 +88,7 @@ $(function() {
         self.setDefault = function(nozzle) {
             OctoPrint.settings.savePluginConfig("nozzlelifetracker", {
                 default_nozzle_id: nozzle.id
-            });
+            }).done(self.loadSettings);
         };
 
         self.confirmRetire = function(nozzle) {
@@ -215,6 +215,7 @@ $(function() {
         console.log("[NLT] VM registered");
     }
 });
+
 
 
 
