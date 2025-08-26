@@ -124,6 +124,8 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             nozzle_id = data.get("nozzle_id")
             if nozzle_id in self._nozzles and not self._nozzles[nozzle_id].get("retired"):
                 self._current_nozzle = nozzle_id
+                self._settings.set(["default_nozzle_id"], nozzle_id)
+                self._settings.save()
                 return {"success": True}
             return {"success": False, "error": "Invalid or retired nozzle."}
 
