@@ -14,8 +14,8 @@ import uuid
 from flask import make_response, request
 import csv
 
-__plugin_name__ = "Nozzle Life Tracker"
-__plugin_version__ = "0.2.7"
+##~~ __plugin_name__ = "Nozzle Life Tracker"
+##~~ __plugin_version__ = "0.2.7"
 __plugin_pythoncompat__ = ">=3.7,<3.12"
 __plugin_octoprint_version__ = ">=1.9,<2"
 
