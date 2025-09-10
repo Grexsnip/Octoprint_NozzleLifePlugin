@@ -205,16 +205,16 @@ $(function() {
         console.warn("[NozzleLifeTracker] ViewModel already registered, skipping second push.");
     } else {
         window.__nlt_vm_pushed = true;
-    
+        console.log("[NLT] OCTOPRINT_VIEWMODELS pushed");
         OCTOPRINT_VIEWMODELS.push({
-            name: "nozzlelifetracker",
-            construct: NozzleLifeTrackerViewModel,
+            construct: [NozzleLifeTrackerViewModel],
             dependencies: ["loginStateViewModel", "settingsViewModel"],
             elements: ["#settings_plugin_nozzlelifetracker", "#sidebar_plugin_nozzlelifetracker"]
         });
         console.log("[NLT] VM registered");
     }
 });
+
 
 
 
