@@ -1,19 +1,52 @@
 # NozzleLifeTracker Plugin - OctoPrint Plugin Scaffold
 
-from octoprint.plugin import (
-    StartupPlugin,
-    SettingsPlugin,
-    AssetPlugin,
-    TemplatePlugin,
-    EventHandlerPlugin,
-    SimpleApiPlugin
-)
+try:
+    from octoprint.plugin import (
+        StartupPlugin,
+        ShutdownPlugin,
+        SettingsPlugin,
+        AssetPlugin,
+        TemplatePlugin,
+        EventHandlerPlugin,
+        SimpleApiPlugin
+    )
+except ImportError:
+    class StartupPlugin(object):
+        pass
+
+    class ShutdownPlugin(object):
+        pass
+
+    class SettingsPlugin(object):
+        pass
+
+    class AssetPlugin(object):
+        pass
+
+    class TemplatePlugin(object):
+        pass
+
+    class EventHandlerPlugin(object):
+        pass
+
+    class SimpleApiPlugin(object):
+        pass
 import time
 import threading
 import uuid
-import re
-from flask import make_response, request
+try:
+    from flask import make_response, request
+except ImportError:
+    request = None
+
+    def make_response(*args, **kwargs):
+        raise RuntimeError("Flask is required for response generation")
 import csv
+from .phase1_pure import (
+    compute_elapsed_seconds,
+    accumulate_tool_seconds,
+    extract_tool_id_from_command,
+)
 
 ##~~ __plugin_name__ = "Nozzle Life Tracker"
 ##~~ __plugin_version__ = "0.2.7"
@@ -26,56 +59,9 @@ DEFAULT_PROFILE_INTERVAL_HOURS = 100.0
 DEFAULT_TOOL_ID = "T0"
 PHASE1_PERSIST_INTERVAL_SECONDS = 300
 PHASE1_PERSIST_CHECK_INTERVAL_SECONDS = 30
-TOOL_CHANGE_CMD_RE = re.compile(r"^\s*T(\d+)\s*(?:;.*)?$", re.IGNORECASE)
-
-
-def compute_elapsed_seconds(last_tick_ts, now_ts):
-    if last_tick_ts is None or now_ts is None:
-        return 0
-    try:
-        delta = float(now_ts) - float(last_tick_ts)
-    except (TypeError, ValueError):
-        return 0
-    if delta <= 0:
-        return 0
-    return int(delta)
-
-
-def accumulate_tool_seconds(tool_state, tool_id, delta_seconds, default_profile_id=DEFAULT_PROFILE_ID):
-    if not tool_id:
-        return tool_state or {}, False
-
-    try:
-        delta_seconds = int(delta_seconds)
-    except (TypeError, ValueError):
-        return tool_state or {}, False
-
-    if delta_seconds <= 0:
-        return dict(tool_state or {}), False
-
-    updated = dict(tool_state or {})
-    normalized_tool_id = str(tool_id).upper()
-    entry = dict(updated.get(normalized_tool_id) or {})
-    entry["tool_id"] = normalized_tool_id
-    entry["profile_id"] = entry.get("profile_id") or default_profile_id
-    try:
-        current_seconds = int(float(entry.get("accumulated_seconds", 0)))
-    except (TypeError, ValueError):
-        current_seconds = 0
-    entry["accumulated_seconds"] = max(0, current_seconds) + delta_seconds
-    updated[normalized_tool_id] = entry
-    return updated, True
-
-
-def extract_tool_id_from_command(cmd):
-    if not cmd:
-        return None
-    match = TOOL_CHANGE_CMD_RE.match(str(cmd))
-    if not match:
-        return None
-    return "T{}".format(match.group(1))
 
 class NozzleLifeTrackerPlugin(StartupPlugin,
+                              ShutdownPlugin,
                               SettingsPlugin,
                               AssetPlugin,
                               TemplatePlugin,
@@ -107,6 +93,19 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         self._ensure_phase1_settings(save=True)
         self._start_phase1_persist_worker()
 
+    def on_shutdown(self):
+        worker = getattr(self, "_persist_worker", None)
+        stop_event = getattr(self, "_persist_worker_stop", None)
+        if worker is None or stop_event is None:
+            return
+
+        try:
+            stop_event.set()
+            if worker.is_alive():
+                worker.join(timeout=3)
+        except Exception:
+            self._logger.exception("Error stopping Phase 1 persist worker")
+
     ##~~ Assets
 
     def get_assets(self):
@@ -124,6 +123,7 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             "default_nozzle_id": None,
             "prompt_before_print": False,
             "display_mode": "circle",  # Options: circle, bar, both
+            "legacy_runtime_enabled": False,
             "print_log": [],
             "nozzle_profiles": {
                 DEFAULT_PROFILE_ID: {
@@ -178,12 +178,14 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             elif event == "PrintPaused":
                 # Persist elapsed runtime up to the pause point
                 self._phase1_handle_print_pause_or_stop_locked(force_persist=True)
-                self._accumulate_runtime(payload)
+                if self._settings.get(["legacy_runtime_enabled"]):
+                    self._accumulate_runtime(payload)
                 self._print_start_time = None
 
             elif event in ["PrintDone", "PrintCancelled", "PrintFailed"]:
                 self._phase1_handle_print_pause_or_stop_locked(force_persist=True)
-                self._accumulate_runtime(payload)
+                if self._settings.get(["legacy_runtime_enabled"]):
+                    self._accumulate_runtime(payload)
                 self._print_start_time = None
 
     def _accumulate_runtime(self, payload):
@@ -346,10 +348,9 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         if not tool_id:
             raise ValueError("tool_id is required")
 
-        self._ensure_phase1_settings(save=False)
-        tool_id = str(tool_id).upper()
-
         with self._lock:
+            self._ensure_phase1_settings(save=False)
+            tool_id = str(tool_id).upper()
             state = self._normalize_tool_state_entry(tool_id, self._tool_state.get(tool_id))
             log_entry = {
                 "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
