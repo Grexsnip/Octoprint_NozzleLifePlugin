@@ -47,6 +47,10 @@ from .phase1_pure import (
     accumulate_tool_seconds,
     extract_tool_id_from_command,
 )
+from .phase1_settings import (
+    ensure_phase1_settings,
+    reset_tool_state,
+)
 
 ##~~ __plugin_name__ = "Nozzle Life Tracker"
 ##~~ __plugin_version__ = "0.2.7"
@@ -351,16 +355,14 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         with self._lock:
             self._ensure_phase1_settings(save=False)
             tool_id = str(tool_id).upper()
-            state = self._normalize_tool_state_entry(tool_id, self._tool_state.get(tool_id))
-            log_entry = {
-                "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
-                "tool_id": tool_id,
-                "profile_id": state.get("profile_id"),
-                "accumulated_seconds_at_reset": state.get("accumulated_seconds", 0)
-            }
-            state["accumulated_seconds"] = 0
-            self._tool_state[tool_id] = state
-            self._replacement_log.append(log_entry)
+            self._tool_state, self._replacement_log = reset_tool_state(
+                self._tool_state,
+                self._replacement_log,
+                tool_id=tool_id,
+                timestamp=time.strftime('%Y-%m-%d %H:%M:%S'),
+                default_profile_id=DEFAULT_PROFILE_ID,
+            )
+            state = self._tool_state[tool_id]
             self._save_phase1_settings(tool_state_only=False)
             return state
 
@@ -422,60 +424,15 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         }
 
     def _ensure_phase1_settings(self, save=False):
+        normalized_profiles, normalized_tool_state, normalized_replacement_log = ensure_phase1_settings(
+            self._settings.get(["nozzle_profiles"]),
+            self._settings.get(["tool_state"]),
+            self._settings.get(["replacement_log"]),
+            default_profile_id=DEFAULT_PROFILE_ID,
+            default_profile_name=DEFAULT_PROFILE_NAME,
+            default_interval_hours=DEFAULT_PROFILE_INTERVAL_HOURS,
+        )
         changed = False
-
-        raw_profiles = self._settings.get(["nozzle_profiles"])
-        if not isinstance(raw_profiles, dict):
-            raw_profiles = {}
-            changed = True
-        normalized_profiles = {}
-        for profile_id, profile in raw_profiles.items():
-            normalized = self._normalize_profile_entry(profile_id, profile)
-            normalized_profiles[normalized["id"]] = normalized
-
-        if DEFAULT_PROFILE_ID not in normalized_profiles:
-            normalized_profiles[DEFAULT_PROFILE_ID] = self._default_profile_dict()
-            changed = True
-
-        raw_tool_state = self._settings.get(["tool_state"])
-        if not isinstance(raw_tool_state, dict):
-            raw_tool_state = {}
-            changed = True
-        normalized_tool_state = {}
-        for tool_id, state in raw_tool_state.items():
-            normalized = self._normalize_tool_state_entry(tool_id, state)
-            if normalized["profile_id"] not in normalized_profiles:
-                normalized["profile_id"] = DEFAULT_PROFILE_ID
-                changed = True
-            normalized_tool_state[normalized["tool_id"]] = normalized
-
-        if "T0" not in normalized_tool_state:
-            normalized_tool_state["T0"] = self._default_tool_state_entry("T0", DEFAULT_PROFILE_ID)
-            changed = True
-
-        raw_replacement_log = self._settings.get(["replacement_log"])
-        if not isinstance(raw_replacement_log, list):
-            raw_replacement_log = []
-            changed = True
-
-        normalized_replacement_log = []
-        for entry in raw_replacement_log:
-            if not isinstance(entry, dict):
-                changed = True
-                continue
-            normalized_entry = {
-                "timestamp": str(entry.get("timestamp") or ""),
-                "tool_id": str(entry.get("tool_id") or "T0").upper(),
-                "profile_id": str(entry.get("profile_id") or DEFAULT_PROFILE_ID),
-                "accumulated_seconds_at_reset": 0
-            }
-            try:
-                normalized_entry["accumulated_seconds_at_reset"] = int(
-                    float(entry.get("accumulated_seconds_at_reset", 0))
-                )
-            except (TypeError, ValueError):
-                changed = True
-            normalized_replacement_log.append(normalized_entry)
 
         if self._nozzle_profiles != normalized_profiles:
             changed = True
