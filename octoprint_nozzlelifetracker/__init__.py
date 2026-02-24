@@ -35,12 +35,15 @@ import time
 import threading
 import uuid
 try:
-    from flask import make_response, request
+    from flask import make_response, request, jsonify
 except ImportError:
     request = None
 
     def make_response(*args, **kwargs):
         raise RuntimeError("Flask is required for response generation")
+
+    def jsonify(*args, **kwargs):
+        raise RuntimeError("Flask is required for JSON responses")
 import csv
 from .phase1_pure import (
     compute_elapsed_seconds,
@@ -51,6 +54,7 @@ from .phase1_settings import (
     ensure_phase1_settings,
     reset_tool_state,
     build_status_payload,
+    normalize_tool_id,
 )
 
 ##~~ __plugin_name__ = "Nozzle Life Tracker"
@@ -224,7 +228,10 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         return True
 
     def on_api_get(self, request):
-        if request.values.get("command") == "export_log_csv":
+        command = request.values.get("command")
+        if command in (None, "status"):
+            return jsonify(self.get_api_status())
+        if command == "export_log_csv":
             output = make_response(self._generate_csv())
             output.headers["Content-Disposition"] = "attachment; filename=nozzle_log.csv"
             output.headers["Content-type"] = "text/csv"
@@ -233,6 +240,9 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
 
     def get_api_commands(self):
         return {
+            "status": [],
+            "set_tool_profile": ["tool_id", "profile_id"],
+            "reset_tool": ["tool_id"],
             "select_nozzle": ["nozzle_id"],
             "get_status": [],
             "get_log": [],
@@ -242,6 +252,48 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         }
 
     def on_api_command(self, command, data):
+        data = data or {}
+        if command == "status":
+            return jsonify(self.get_api_status())
+
+        elif command == "set_tool_profile":
+            tool_id = normalize_tool_id(data.get("tool_id"))
+            profile_id = data.get("profile_id")
+            if not tool_id:
+                self._logger.debug("Phase1 API set_tool_profile invalid tool_id: %r", data.get("tool_id"))
+                return jsonify({"error": "Invalid tool_id"}), 400
+            if not profile_id:
+                self._logger.debug("Phase1 API set_tool_profile missing profile_id")
+                return jsonify({"error": "Missing profile_id"}), 400
+
+            with self._lock:
+                self._ensure_phase1_settings(save=False)
+                if profile_id not in self._nozzle_profiles:
+                    self._logger.debug("Phase1 API set_tool_profile unknown profile_id: %r", profile_id)
+                    return jsonify({"error": "Unknown profile_id"}), 400
+
+            try:
+                self.set_tool_profile(tool_id, profile_id)
+            except ValueError as exc:
+                self._logger.debug("Phase1 API set_tool_profile error: %s", exc)
+                return jsonify({"error": str(exc)}), 400
+
+            return jsonify(self.get_api_status())
+
+        elif command == "reset_tool":
+            tool_id = normalize_tool_id(data.get("tool_id"))
+            if not tool_id:
+                self._logger.debug("Phase1 API reset_tool invalid tool_id: %r", data.get("tool_id"))
+                return jsonify({"error": "Invalid tool_id"}), 400
+
+            try:
+                self.reset_tool(tool_id)
+            except ValueError as exc:
+                self._logger.debug("Phase1 API reset_tool error: %s", exc)
+                return jsonify({"error": str(exc)}), 400
+
+            return jsonify(self.get_api_status())
+
         if command == "select_nozzle":
             nozzle_id = data.get("nozzle_id")
             if nozzle_id in self._nozzles and not self._nozzles[nozzle_id].get("retired"):
@@ -299,6 +351,9 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             output.headers["Content-type"] = "text/csv"
             return output
 
+        self._logger.debug("Unknown API command: %r", command)
+        return jsonify({"error": "Unknown command"}), 400
+
     def _generate_csv(self):
         import io
         output = io.StringIO()
@@ -307,6 +362,15 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         for entry in self._print_log:
             writer.writerow(entry)
         return output.getvalue()
+
+    def get_api_status(self):
+        with self._lock:
+            self._ensure_phase1_settings(save=False)
+            return build_status_payload(
+                self._nozzle_profiles,
+                self._tool_state,
+                now_ts=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+            )
 
     ##~~ Helper Methods
 
