@@ -144,3 +144,71 @@ def reset_tool_state(
     )
 
     return tool_state_in, replacement_in
+
+
+def _tool_sort_key(tool_id):
+    normalized = normalize_tool_id(tool_id)
+    if normalized is None:
+        return (1, str(tool_id))
+    return (0, int(normalized[1:]), normalized)
+
+
+def build_status_payload(
+    nozzle_profiles,
+    tool_state,
+    *,
+    now_ts=None,
+):
+    profiles_fixed, tool_state_fixed, _ = ensure_phase1_settings(
+        nozzle_profiles,
+        tool_state,
+        [],
+    )
+
+    profiles_out = []
+    for profile in sorted(profiles_fixed.values(), key=lambda p: (str(p.get("name") or ""), str(p.get("id") or ""))):
+        notes_value = profile.get("notes") if isinstance(profile, dict) else None
+        profiles_out.append(
+            {
+                "id": str(profile.get("id") or ""),
+                "name": str(profile.get("name") or ""),
+                "interval_hours": float(profile.get("interval_hours", 0.0) or 0.0),
+                "notes": notes_value if notes_value is not None else None,
+            }
+        )
+
+    tools_out = []
+    for tool_id in sorted(tool_state_fixed.keys(), key=_tool_sort_key):
+        tool = tool_state_fixed.get(tool_id) or {}
+        profile_id = str(tool.get("profile_id") or "")
+        profile = profiles_fixed.get(profile_id) or {}
+        interval_hours = float(profile.get("interval_hours", 0.0) or 0.0)
+        accumulated_seconds = _coerce_nonnegative_int(tool.get("accumulated_seconds", 0))
+        accumulated_hours = round(accumulated_seconds / 3600.0, 2)
+        if interval_hours <= 0:
+            percent_to_interval = 0.0
+            is_overdue = False
+        else:
+            percent_to_interval = round(min(100.0, (accumulated_hours / interval_hours) * 100.0), 1)
+            is_overdue = accumulated_hours >= interval_hours
+
+        tools_out.append(
+            {
+                "tool_id": str(tool.get("tool_id") or tool_id),
+                "profile_id": profile_id,
+                "profile_name": str(profile.get("name") or "Unknown"),
+                "interval_hours": interval_hours,
+                "accumulated_seconds": accumulated_seconds,
+                "accumulated_hours": accumulated_hours,
+                "percent_to_interval": percent_to_interval,
+                "is_overdue": bool(is_overdue),
+            }
+        )
+
+    return {
+        "profiles": profiles_out,
+        "tools": tools_out,
+        "meta": {
+            "generated_at": now_ts,
+        },
+    }
