@@ -11,6 +11,7 @@ from octoprint.plugin import (
 import time
 import threading
 import uuid
+import re
 from flask import make_response, request
 import csv
 
@@ -22,6 +23,57 @@ __plugin_octoprint_version__ = ">=1.9,<2"
 DEFAULT_PROFILE_ID = "default_0_4_brass"
 DEFAULT_PROFILE_NAME = "0.4 Brass"
 DEFAULT_PROFILE_INTERVAL_HOURS = 100.0
+DEFAULT_TOOL_ID = "T0"
+PHASE1_PERSIST_INTERVAL_SECONDS = 300
+PHASE1_PERSIST_CHECK_INTERVAL_SECONDS = 30
+TOOL_CHANGE_CMD_RE = re.compile(r"^\s*T(\d+)\s*(?:;.*)?$", re.IGNORECASE)
+
+
+def compute_elapsed_seconds(last_tick_ts, now_ts):
+    if last_tick_ts is None or now_ts is None:
+        return 0
+    try:
+        delta = float(now_ts) - float(last_tick_ts)
+    except (TypeError, ValueError):
+        return 0
+    if delta <= 0:
+        return 0
+    return int(delta)
+
+
+def accumulate_tool_seconds(tool_state, tool_id, delta_seconds, default_profile_id=DEFAULT_PROFILE_ID):
+    if not tool_id:
+        return tool_state or {}, False
+
+    try:
+        delta_seconds = int(delta_seconds)
+    except (TypeError, ValueError):
+        return tool_state or {}, False
+
+    if delta_seconds <= 0:
+        return dict(tool_state or {}), False
+
+    updated = dict(tool_state or {})
+    normalized_tool_id = str(tool_id).upper()
+    entry = dict(updated.get(normalized_tool_id) or {})
+    entry["tool_id"] = normalized_tool_id
+    entry["profile_id"] = entry.get("profile_id") or default_profile_id
+    try:
+        current_seconds = int(float(entry.get("accumulated_seconds", 0)))
+    except (TypeError, ValueError):
+        current_seconds = 0
+    entry["accumulated_seconds"] = max(0, current_seconds) + delta_seconds
+    updated[normalized_tool_id] = entry
+    return updated, True
+
+
+def extract_tool_id_from_command(cmd):
+    if not cmd:
+        return None
+    match = TOOL_CHANGE_CMD_RE.match(str(cmd))
+    if not match:
+        return None
+    return "T{}".format(match.group(1))
 
 class NozzleLifeTrackerPlugin(StartupPlugin,
                               SettingsPlugin,
@@ -39,6 +91,13 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         self._nozzle_profiles = {}
         self._tool_state = {}
         self._replacement_log = []
+        self._is_printing = False
+        self._last_tick_ts = None
+        self._active_tool_id = DEFAULT_TOOL_ID
+        self._phase1_runtime_dirty = False
+        self._last_phase1_persist_ts = 0
+        self._persist_worker = None
+        self._persist_worker_stop = threading.Event()
 
     ##~~ StartupPlugin
 
@@ -46,6 +105,7 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         self._logger.info("NozzleLifeTracker plugin started.")
         self._load_nozzles()
         self._ensure_phase1_settings(save=True)
+        self._start_phase1_persist_worker()
 
     ##~~ Assets
 
@@ -86,7 +146,7 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
     def on_settings_save(self, data):
         SettingsPlugin.on_settings_save(self, data)
         self._load_nozzles()
-        self._ensure_phase1_settings(save=True)
+        self._ensure_phase1_settings(save=False)
 
     def get_template_configs(self):
         # Explicit template mapping; forces OctoPrint to inject both panes
@@ -107,18 +167,22 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
     def on_event(self, event, payload):
         with self._lock:
             if event == "PrintStarted":
+                self._phase1_handle_print_start_or_resume_locked()
                 self._print_start_time = time.time()
 
             elif event == "PrintResumed":
                 # Resume timing after a paused print
+                self._phase1_handle_print_start_or_resume_locked()
                 self._print_start_time = time.time()
 
             elif event == "PrintPaused":
                 # Persist elapsed runtime up to the pause point
+                self._phase1_handle_print_pause_or_stop_locked(force_persist=True)
                 self._accumulate_runtime(payload)
                 self._print_start_time = None
 
             elif event in ["PrintDone", "PrintCancelled", "PrintFailed"]:
+                self._phase1_handle_print_pause_or_stop_locked(force_persist=True)
                 self._accumulate_runtime(payload)
                 self._print_start_time = None
 
@@ -246,6 +310,8 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         self._nozzle_profiles = self._settings.get(["nozzle_profiles"]) or {}
         self._tool_state = self._settings.get(["tool_state"]) or {}
         self._replacement_log = self._settings.get(["replacement_log"]) or []
+        if self._active_tool_id is None:
+            self._active_tool_id = DEFAULT_TOOL_ID
 
     def get_profiles(self):
         self._ensure_phase1_settings(save=False)
@@ -259,22 +325,22 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         if not tool_id:
             raise ValueError("tool_id is required")
 
-        self._ensure_phase1_settings(save=False)
-        tool_id = str(tool_id).upper()
+        with self._lock:
+            self._ensure_phase1_settings(save=False)
+            tool_id = str(tool_id).upper()
 
-        if profile_id not in self._nozzle_profiles:
-            raise ValueError("profile_id not found")
+            if profile_id not in self._nozzle_profiles:
+                raise ValueError("profile_id not found")
 
-        state = self._normalize_tool_state_entry(
-            tool_id,
-            self._tool_state.get(tool_id),
-            default_profile_id=profile_id
-        )
-        state["profile_id"] = profile_id
-        self._tool_state[tool_id] = state
-        self._settings.set(["tool_state"], self._tool_state)
-        self._settings.save()
-        return state
+            state = self._normalize_tool_state_entry(
+                tool_id,
+                self._tool_state.get(tool_id),
+                default_profile_id=profile_id
+            )
+            state["profile_id"] = profile_id
+            self._tool_state[tool_id] = state
+            self._save_phase1_settings(tool_state_only=True)
+            return state
 
     def reset_tool(self, tool_id):
         if not tool_id:
@@ -294,10 +360,16 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             state["accumulated_seconds"] = 0
             self._tool_state[tool_id] = state
             self._replacement_log.append(log_entry)
-            self._settings.set(["tool_state"], self._tool_state)
-            self._settings.set(["replacement_log"], self._replacement_log)
-            self._settings.save()
+            self._save_phase1_settings(tool_state_only=False)
             return state
+
+    def hook_gcode_queuing(self, comm_instance, phase, cmd, cmd_type, gcode, *args, **kwargs):
+        tool_id = extract_tool_id_from_command(cmd)
+        if not tool_id:
+            return
+
+        with self._lock:
+            self._phase1_handle_tool_change_locked(tool_id)
 
     def _default_profile_dict(self):
         return {
@@ -422,7 +494,113 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             if save:
                 self._settings.save()
 
+    def _phase1_handle_print_start_or_resume_locked(self):
+        now_ts = time.time()
+        if self._is_printing:
+            self._phase1_tick_locked(now_ts=now_ts, persist_if_due=True)
+        if not self._active_tool_id:
+            self._active_tool_id = DEFAULT_TOOL_ID
+        self._ensure_tool_state_entry_locked(self._active_tool_id)
+        self._is_printing = True
+        self._last_tick_ts = now_ts
+
+    def _phase1_handle_print_pause_or_stop_locked(self, force_persist=False):
+        self._phase1_tick_locked(now_ts=time.time(), persist_if_due=False)
+        self._is_printing = False
+        self._last_tick_ts = None
+        if force_persist:
+            self._maybe_persist_phase1_tool_state_locked(force=True)
+
+    def _phase1_handle_tool_change_locked(self, next_tool_id):
+        next_tool_id = str(next_tool_id).upper()
+        now_ts = time.time()
+        if self._is_printing:
+            self._phase1_tick_locked(now_ts=now_ts, persist_if_due=False)
+            self._active_tool_id = next_tool_id
+            self._ensure_tool_state_entry_locked(self._active_tool_id)
+            self._last_tick_ts = now_ts
+            self._maybe_persist_phase1_tool_state_locked(force=False)
+        else:
+            self._active_tool_id = next_tool_id
+            self._ensure_tool_state_entry_locked(self._active_tool_id)
+
+    def _phase1_tick_locked(self, now_ts=None, persist_if_due=True):
+        if not self._is_printing or not self._active_tool_id:
+            return 0
+
+        if now_ts is None:
+            now_ts = time.time()
+
+        delta_seconds = compute_elapsed_seconds(self._last_tick_ts, now_ts)
+        self._last_tick_ts = now_ts
+        if delta_seconds <= 0:
+            return 0
+
+        self._ensure_tool_state_entry_locked(self._active_tool_id)
+        updated_tool_state, changed = accumulate_tool_seconds(
+            self._tool_state,
+            self._active_tool_id,
+            delta_seconds
+        )
+        if changed:
+            self._tool_state = updated_tool_state
+            self._phase1_runtime_dirty = True
+            if persist_if_due:
+                self._maybe_persist_phase1_tool_state_locked(force=False)
+        return delta_seconds
+
+    def _ensure_tool_state_entry_locked(self, tool_id):
+        tool_id = str(tool_id).upper()
+        state = self._normalize_tool_state_entry(tool_id, self._tool_state.get(tool_id))
+        if state["profile_id"] not in self._nozzle_profiles:
+            state["profile_id"] = DEFAULT_PROFILE_ID
+        self._tool_state[tool_id] = state
+        return state
+
+    def _save_phase1_settings(self, tool_state_only=False):
+        self._settings.set(["tool_state"], self._tool_state)
+        if not tool_state_only:
+            self._settings.set(["replacement_log"], self._replacement_log)
+        self._settings.save()
+        self._phase1_runtime_dirty = False
+        self._last_phase1_persist_ts = time.time()
+
+    def _maybe_persist_phase1_tool_state_locked(self, force=False):
+        if not self._phase1_runtime_dirty:
+            return False
+
+        now_ts = time.time()
+        due = force or (now_ts - self._last_phase1_persist_ts) >= PHASE1_PERSIST_INTERVAL_SECONDS
+        if not due:
+            return False
+
+        self._save_phase1_settings(tool_state_only=True)
+        return True
+
+    def _start_phase1_persist_worker(self):
+        if self._persist_worker and self._persist_worker.is_alive():
+            return
+
+        self._persist_worker_stop.clear()
+        self._persist_worker = threading.Thread(
+            target=self._phase1_persist_worker_loop,
+            name="NozzleLifePhase1Persist",
+            daemon=True
+        )
+        self._persist_worker.start()
+
+    def _phase1_persist_worker_loop(self):
+        while not self._persist_worker_stop.wait(PHASE1_PERSIST_CHECK_INTERVAL_SECONDS):
+            with self._lock:
+                if not self._is_printing:
+                    continue
+                self._phase1_tick_locked(now_ts=time.time(), persist_if_due=True)
+
 
 def __plugin_load__():
     global __plugin_implementation__
+    global __plugin_hooks__
     __plugin_implementation__ = NozzleLifeTrackerPlugin()
+    __plugin_hooks__ = {
+        "octoprint.comm.protocol.gcode.queuing": __plugin_implementation__.hook_gcode_queuing
+    }
