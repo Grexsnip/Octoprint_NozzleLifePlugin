@@ -60,3 +60,23 @@
   width: 100%;
   max-width: 180px;
 }
+
+.nlt-overdue {
+  font-weight: 600;
+}
+
+.nlt-overdue td {
+  background-color: #fff3cd;
+}
+
+.nlt-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: 6px;
+}
+
+.nlt-badge-overdue {
+  background: #f5c6cb;
+  color: #721c24;
+}

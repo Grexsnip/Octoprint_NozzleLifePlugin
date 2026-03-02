@@ -1,4 +1,4 @@
-﻿# NozzleLifeTracker Plugin - OctoPrint Plugin Scaffold
+# NozzleLifeTracker Plugin - OctoPrint Plugin Scaffold
 
 try:
     from octoprint.plugin import (
@@ -59,7 +59,7 @@ from .phase1_settings import (
 )
 
 __plugin_name__ = "Nozzle Life Tracker"
-__plugin_version__ = "0.2.12"
+__plugin_version__ = "0.2.13"
 __plugin_pythoncompat__ = ">=3.7,<3.12"
 __plugin_octoprint_version__ = ">=1.9,<2"
 
@@ -612,3 +612,4 @@ def __plugin_load__():
     __plugin_hooks__ = {
         "octoprint.comm.protocol.gcode.queuing": __plugin_implementation__.hook_gcode_queuing
     }
+

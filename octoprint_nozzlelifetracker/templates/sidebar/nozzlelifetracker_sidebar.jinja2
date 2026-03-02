@@ -17,7 +17,7 @@
     </tr>
   </thead>
   <tbody data-bind="foreach: tools">
-    <tr>
+    <tr data-bind="css: { 'nlt-overdue': is_overdue }">
       <td data-bind="text: tool_id"></td>
       <td>
         <div data-bind="text: profile_name"></div>
@@ -26,7 +26,10 @@
       </td>
       <td data-bind="text: accumulated_hours + 'h / ' + interval_hours + 'h'"></td>
       <td data-bind="text: percent_to_interval + '%' "></td>
-      <td data-bind="text: is_overdue ? 'Overdue' : 'OK'"></td>
+      <td>
+        <span data-bind="text: is_overdue ? 'Overdue' : 'OK'"></span>
+        <span class="nlt-badge nlt-badge-overdue" data-bind="visible: is_overdue">⚠ OVERDUE</span>
+      </td>
       <td>
         <button class="btn btn-mini" data-bind="click: $root.resetTool">Reset</button>
       </td>
