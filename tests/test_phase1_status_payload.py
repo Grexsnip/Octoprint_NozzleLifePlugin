@@ -13,7 +13,7 @@ def test_build_status_payload_basic_structure_from_defaults():
     assert isinstance(payload["tools"], list)
     assert payload["meta"] == {"generated_at": "2026-02-24T12:00:00Z"}
 
-    default_profile = next(p for p in payload["profiles"] if p["id"] == "default_brass_0_4")
+    default_profile = next(p for p in payload["profiles"] if p["id"] == "default_0_4_brass")
     assert set(default_profile.keys()) == {"id", "name", "interval_hours", "notes"}
     assert default_profile["name"] == "0.4 Brass"
     assert isinstance(default_profile["interval_hours"], float)
@@ -29,7 +29,7 @@ def test_build_status_payload_basic_structure_from_defaults():
         "percent_to_interval",
         "is_overdue",
     }
-    assert t0["profile_id"] == "default_brass_0_4"
+    assert t0["profile_id"] == "default_0_4_brass"
     assert t0["accumulated_seconds"] == 0
     assert t0["accumulated_hours"] == 0.0
     assert t0["percent_to_interval"] == 0.0
@@ -39,7 +39,7 @@ def test_build_status_payload_basic_structure_from_defaults():
 def test_build_status_payload_percent_rounding_and_overdue_logic():
     profiles = {
         "p1": {"id": "p1", "name": "Brass", "interval_hours": 100.0, "notes": ""},
-        "default_brass_0_4": {"id": "default_brass_0_4", "name": "0.4 Brass", "interval_hours": 100.0, "notes": ""},
+        "default_0_4_brass": {"id": "default_0_4_brass", "name": "0.4 Brass", "interval_hours": 100.0, "notes": ""},
     }
 
     payload = build_status_payload(
@@ -64,8 +64,8 @@ def test_build_status_payload_zero_interval_handling():
     payload = build_status_payload(
         {
             "p0": {"id": "p0", "name": "Test", "interval_hours": 0.0, "notes": None},
-            "default_brass_0_4": {
-                "id": "default_brass_0_4",
+            "default_0_4_brass": {
+                "id": "default_0_4_brass",
                 "name": "0.4 Brass",
                 "interval_hours": 100.0,
                 "notes": "",
@@ -82,18 +82,18 @@ def test_build_status_payload_zero_interval_handling():
 def test_build_status_payload_tool_sorting_by_numeric_index():
     payload = build_status_payload(
         {
-            "default_brass_0_4": {
-                "id": "default_brass_0_4",
+            "default_0_4_brass": {
+                "id": "default_0_4_brass",
                 "name": "0.4 Brass",
                 "interval_hours": 100.0,
                 "notes": "",
             }
         },
         {
-            "T2": {"tool_id": "T2", "profile_id": "default_brass_0_4", "accumulated_seconds": 0},
-            "T0": {"tool_id": "T0", "profile_id": "default_brass_0_4", "accumulated_seconds": 0},
-            "T10": {"tool_id": "T10", "profile_id": "default_brass_0_4", "accumulated_seconds": 0},
-            "T1": {"tool_id": "T1", "profile_id": "default_brass_0_4", "accumulated_seconds": 0},
+            "T2": {"tool_id": "T2", "profile_id": "default_0_4_brass", "accumulated_seconds": 0},
+            "T0": {"tool_id": "T0", "profile_id": "default_0_4_brass", "accumulated_seconds": 0},
+            "T10": {"tool_id": "T10", "profile_id": "default_0_4_brass", "accumulated_seconds": 0},
+            "T1": {"tool_id": "T1", "profile_id": "default_0_4_brass", "accumulated_seconds": 0},
         },
     )
 

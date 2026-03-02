@@ -7,11 +7,11 @@ from octoprint_nozzlelifetracker.phase1_settings import (
 def test_ensure_phase1_settings_creates_defaults_for_invalid_inputs():
     profiles, tool_state, replacement_log = ensure_phase1_settings(None, None, None)
 
-    assert "default_brass_0_4" in profiles
-    assert profiles["default_brass_0_4"]["name"] == "0.4 Brass"
-    assert profiles["default_brass_0_4"]["interval_hours"] == 100.0
+    assert "default_0_4_brass" in profiles
+    assert profiles["default_0_4_brass"]["name"] == "0.4 Brass"
+    assert profiles["default_0_4_brass"]["interval_hours"] == 100.0
     assert "T0" in tool_state
-    assert tool_state["T0"]["profile_id"] == "default_brass_0_4"
+    assert tool_state["T0"]["profile_id"] == "default_0_4_brass"
     assert tool_state["T0"]["accumulated_seconds"] == 0
     assert replacement_log == []
 
@@ -42,8 +42,8 @@ def test_ensure_phase1_settings_repairs_bad_tool_entries():
 def test_ensure_phase1_settings_preserves_valid_data():
     input_profiles = {
         "p1": {"id": "p1", "name": "0.6 Hardened", "interval_hours": 300.0, "notes": "Primary"},
-        "default_brass_0_4": {
-            "id": "default_brass_0_4",
+        "default_0_4_brass": {
+            "id": "default_0_4_brass",
             "name": "0.4 Brass",
             "interval_hours": 100.0,
             "notes": "",
@@ -51,7 +51,7 @@ def test_ensure_phase1_settings_preserves_valid_data():
     }
     input_tool_state = {
         "T1": {"tool_id": "T1", "profile_id": "p1", "accumulated_seconds": 42},
-        "T0": {"tool_id": "T0", "profile_id": "default_brass_0_4", "accumulated_seconds": 5},
+        "T0": {"tool_id": "T0", "profile_id": "default_0_4_brass", "accumulated_seconds": 5},
     }
     input_log = [
         {
@@ -82,4 +82,3 @@ def test_normalize_tool_id():
     assert normalize_tool_id(None) is None
     assert normalize_tool_id("X0") is None
     assert normalize_tool_id("T") is None
-

@@ -35,11 +35,75 @@ def _normalize_profile_entry(profile_key, profile, default_interval_hours):
     }
 
 
+def _profiles_equivalent(left_profile, right_profile):
+    left = left_profile if isinstance(left_profile, dict) else {}
+    right = right_profile if isinstance(right_profile, dict) else {}
+    left_name = str(left.get("name") or "").strip().lower()
+    right_name = str(right.get("name") or "").strip().lower()
+    if left_name != right_name:
+        return False
+    try:
+        left_interval = float(left.get("interval_hours", 0.0))
+    except (TypeError, ValueError):
+        left_interval = 0.0
+    try:
+        right_interval = float(right.get("interval_hours", 0.0))
+    except (TypeError, ValueError):
+        right_interval = 0.0
+    return abs(left_interval - right_interval) <= 1e-9
+
+
+def dedupe_profiles(
+    nozzle_profiles,
+    tool_state,
+    *,
+    canonical_default_id="default_0_4_brass",
+    aliases=None,
+):
+    aliases_map = {"default_brass_0_4": "default_0_4_brass"}
+    if isinstance(aliases, dict):
+        aliases_map.update(aliases)
+
+    profiles_fixed = dict(nozzle_profiles or {})
+    tool_state_in = tool_state if isinstance(tool_state, dict) else {}
+    tool_state_fixed = {}
+    changed = False
+
+    for alias_id, target_id in aliases_map.items():
+        if target_id != canonical_default_id:
+            continue
+        if alias_id not in profiles_fixed:
+            continue
+        alias_profile = profiles_fixed.get(alias_id)
+        canonical_profile = profiles_fixed.get(target_id)
+        if canonical_profile is None:
+            moved_profile = dict(alias_profile or {})
+            moved_profile["id"] = target_id
+            profiles_fixed[target_id] = moved_profile
+            del profiles_fixed[alias_id]
+            changed = True
+            continue
+        if _profiles_equivalent(canonical_profile, alias_profile):
+            del profiles_fixed[alias_id]
+            changed = True
+
+    for tool_key, raw_entry in tool_state_in.items():
+        entry = dict(raw_entry) if isinstance(raw_entry, dict) else {}
+        profile_id = entry.get("profile_id")
+        mapped_profile = aliases_map.get(profile_id, profile_id)
+        if mapped_profile != profile_id:
+            entry["profile_id"] = mapped_profile
+            changed = True
+        tool_state_fixed[tool_key] = entry
+
+    return profiles_fixed, tool_state_fixed, changed
+
+
 def ensure_phase1_settings(
     nozzle_profiles,
     tool_state,
     replacement_log,
-    default_profile_id="default_brass_0_4",
+    default_profile_id="default_0_4_brass",
     default_profile_name="0.4 Brass",
     default_interval_hours=100.0,
 ):
@@ -113,7 +177,7 @@ def reset_tool_state(
     tool_id,
     timestamp,
     profile_id=None,
-    default_profile_id="default_brass_0_4",
+    default_profile_id="default_0_4_brass",
 ):
     normalized_tool = normalize_tool_id(tool_id)
     if normalized_tool is None:

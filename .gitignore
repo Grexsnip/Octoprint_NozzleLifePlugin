@@ -12,3 +12,5 @@ venv/
 # Coverage files (future-proofing)
 .coverage
 htmlcov/
+
+diff/

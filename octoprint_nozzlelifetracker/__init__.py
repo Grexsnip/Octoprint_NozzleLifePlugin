@@ -52,6 +52,7 @@ from .phase1_pure import (
 )
 from .phase1_settings import (
     ensure_phase1_settings,
+    dedupe_profiles,
     reset_tool_state,
     build_status_payload,
     normalize_tool_id,
@@ -486,6 +487,15 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         self._nozzle_profiles = normalized_profiles
         self._tool_state = normalized_tool_state
         self._replacement_log = normalized_replacement_log
+        deduped_profiles, deduped_tool_state, dedupe_changed = dedupe_profiles(
+            self._nozzle_profiles,
+            self._tool_state,
+            canonical_default_id=DEFAULT_PROFILE_ID,
+        )
+        if dedupe_changed:
+            self._nozzle_profiles = deduped_profiles
+            self._tool_state = deduped_tool_state
+            changed = True
 
         if changed:
             self._settings.set(["nozzle_profiles"], self._nozzle_profiles)
