@@ -1,218 +1,91 @@
-$(function() {
+$(function () {
     function NozzleLifeTrackerViewModel(parameters) {
         var self = this;
-        console.log("[NLT] VM construct");
         self.loginStateViewModel = parameters[0];
-        self.settingsViewModel   = parameters[1];
+        self.settingsViewModel = parameters[1];
 
-        // Sidebar observables
-        self.nozzleName = ko.observable("Unknown");
-        self.runtimeText = ko.observable("0h used");
-        self.displayMode = ko.observable('runtime');
-        self.statusColor = ko.observable("gray");
-        self.progressPercent = ko.observable("0%");
-        self.progressBarClass = ko.observable("progress-bar-success");
-        // Option A: computed from nozzles (read-only; do not write to it)
-        // We define nozzles first, then compute hasData from it.
+        self.profiles = ko.observableArray([]);
+        self.tools = ko.observableArray([]);
+        self.lastGeneratedAt = ko.observable("");
+        self.errorText = ko.observable("");
 
-        // Settings observables
-        self.nozzles = ko.observableArray([]);
-        self.hasData = ko.pureComputed(function () {
-            var list = self.nozzles() || [];
-            return list.length > 0;
+        self.hasTools = ko.pureComputed(function () {
+            return self.tools().length > 0;
         });
-        self.currentNozzle  = ko.observable(null);
-        self.displayModeSetting = ko.observable("circle");
-        self.promptBeforePrint = ko.observable(false);
 
-        // Update sidebar status
-        self.updateStatus = function() {
-            OctoPrint.simpleApiCommand("nozzlelifetracker", "get_status", {})
-            .done(function(response) {
-                const runtime = response.runtime || 0;
-                const expected = response.expected || 1;
-                const percentUsed = Math.min(100, (runtime / expected) * 100);
+        self.fetchStatus = function () {
+            return OctoPrint.simpleApiCommand("nozzlelifetracker", "status", {})
+                .done(function (response) {
+                    var profiles = (response && response.profiles) || [];
+                    var tools = (response && response.tools) || [];
+                    var meta = (response && response.meta) || {};
 
-                self.nozzleName(response.nozzle_name);
-                self.runtimeText(runtime.toFixed(2) + "h of " + expected.toFixed(2) + "h");
-                self.displayMode(response.display_mode || "circle");
-
-                if (percentUsed >= 100) {
-                    self.statusColor("red");
-                    self.progressBarClass("progress-bar-danger");
-                } else if (percentUsed >= 90) {
-                    self.statusColor("yellow");
-                    self.progressBarClass("progress-bar-warning");
-                } else {
-                    self.statusColor("green");
-                    self.progressBarClass("progress-bar-success");
-                }
-
-                self.progressPercent(percentUsed.toFixed(0) + "%");
-            });
-        };
-
-        // Auto-refresh sidebar
-        setInterval(self.updateStatus, 5 * 60 * 1000);
-        self.updateStatus();
-
-        // Settings logic
-        /* self.loadSettings = function() {
-            OctoPrint.settings.getPluginConfigData("nozzlelifetracker", function(data) {
-                self.nozzles(Object.entries(data.nozzles || {}).map(([id, obj]) => {
-                    obj.id = id;
-                    return obj;
-                }).sort((a, b) => (a.retired===b.retired)?0:(a.retired?1:-1));  // Active first
-                self.promptBeforePrint(data.prompt_before_print || false);
-                self.displayModeSetting(data.display_mode || "circle");
-            });
-        }; */
-        self.loadSettings = function() {
-            // Read settings from the injected settingsViewModel
-            var p = self.settingsViewModel.settings.plugins.nozzlelifetracker;
-            var data = {
-                nozzles: ko.unwrap(p.nozzles) || {},
-                prompt_before_print: ko.unwrap(p.prompt_before_print),
-                display_mode: ko.unwrap(p.display_mode) || "circle"
-            };
-            self.nozzles(
-                Object.entries(data.nozzles).map(([id, obj]) => {
-                    obj.id = id;
-                    return obj;
-                }).sort((a, b) => (a.retired===b.retired)?0:(a.retired?1:-1)) // active first
-                );
-            self.promptBeforePrint(!!data.prompt_before_print);
-            self.displayModeSetting(data.display_mode);
-        };
-
-        self.setDefault = function(nozzle) {
-            OctoPrint.settings.savePluginConfig("nozzlelifetracker", {
-                default_nozzle_id: nozzle.id
-            }).done(self.loadSettings);
-        };
-
-        self.confirmRetire = function(nozzle) {
-            if (confirm("Are you sure you want to retire this nozzle? This action cannot be undone.")) {
-                OctoPrint.simpleApiCommand("nozzlelifetracker", "retire_nozzle", {
-                    nozzle_id: nozzle.id
-                }).done(self.loadSettings);
-            }
-        };
-
-        self.onAllBound = function() {
-            console.log("[NLT] onAllBound fired");
-            
-            // Try immediately (sidebar may already be there)
-            //bindTargetsOnce();// Bind exactly once, when the DOM and all VMs are ready
-            
-            // Bind when Settings dialog is shown (OctoPrint injects its DOM on open)
-            //$("#settings_dialog").on("shown.bs.modal", function () {
-            //    bindTargetsOnce();
-            //});
-
-            // As a belt-and-suspenders: observe for late-inserted nodes, then stop
-            /*var mo = new MutationObserver(function () {
-                bindTargetsOnce();
-                var s = document.getElementById("settings_plugin_nozzlelifetracker_content") ||
-                    document.getElementById("settings_plugin_nozzlelifetracker");
-                var b = document.getElementById("sidebar_plugin_nozzlelifetracker_content") ||
-                    document.getElementById("sidebar_plugin_nozzlelifetracker");
-                if (s && ko.dataFor(s) && b && ko.dataFor(b)) {
-                    mo.disconnect();
-                }
-            });
-            mo.observe(document.body, { childList: true, subtree: true });*/
-
-            // Short retry loop to catch late insertion in the first seconds
-            //var tries = 0;
-            //var t = setInterval(function () {
-            //    bindTargetsOnce();
-            //    var s = document.getElementById("settings_plugin_nozzlelifetracker_content");
-            //    var b = document.getElementById("sidebar_plugin_nozzlelifetracker_content");
-            //    if ((s && ko.dataFor(s)) && (b && ko.dataFor(b))) {
-            //        clearInterval(t);
-            //    } else if (++tries >= 40) { //~8s at 200ms
-            //        clearInterval(t);
-            //    }
-            //}, 200);
-        };
-
-        /*function bindTargetsOnce() {
-            // Prefer *_content nodes; fall back to root wrappers if the content
-            // wrapper hasn't been injected yet.
-            var settingsNode =
-                document.getElementById("settings_plugin_nozzlelifetracker_content") ||
-                document.getElementById("settings_plugin_nozzlelifetracker");
-
-            var sidebarNode =
-                document.getElementById("sidebar_plugin_nozzlelifetracker_content")  ||
-                document.getElementById("sidebar_plugin_nozzlelifetracker");
-            
-            var nodes = [settingsNode, sidebarNode].filter(Boolean);
-
-            var didBind = false;
-            nodes.forEach(function (node) {
-                if (node && !ko.dataFor(node)) {
-                    ko.applyBindings(self, node);
-                    didBind = true;
-                }
-            });
-            if (didBind) {
-                console.log("[NLT] manual bound (now)", {
-                    settings: !!settingsNode,
-                    sidebar: !!sidebarNode
+                    self.profiles(profiles);
+                    self.tools(
+                        tools.map(function (tool) {
+                            return {
+                                tool_id: tool.tool_id,
+                                profile_id: tool.profile_id,
+                                profile_name: tool.profile_name,
+                                interval_hours: tool.interval_hours,
+                                accumulated_seconds: tool.accumulated_seconds,
+                                accumulated_hours: tool.accumulated_hours,
+                                percent_to_interval: tool.percent_to_interval,
+                                is_overdue: tool.is_overdue,
+                                selected_profile_id: ko.observable(tool.profile_id),
+                            };
+                        })
+                    );
+                    self.lastGeneratedAt(meta.generated_at || "");
+                    self.errorText("");
+                })
+                .fail(function (xhr) {
+                    console.log("[NozzleLifeTracker] status fetch failed", xhr);
+                    self.errorText("Failed to load Phase 1 status.");
                 });
-            }
-        };*/
-
-        self.exportLog = function() {
-            window.location.href = API_BASEURL + "plugin/nozzlelifetracker?command=export_log_csv";
         };
 
-        self.onBeforeBinding = function() {
-            console.log("[NLT] onBeforeBinding start");
-            var s = self.settingsViewModel && self.settingsViewModel.settings;
-            var p = s && s.plugins && s.plugins.nozzlelifetracker;
-            if (!p) {
-                console.warn("[NLT] settingsViewModel.plugins.nozzlelifetracker is missing");
-                // keep safe defaults so KO binding still succeeds
-                self.displayMode("runtime");
-                self.nozzles([]);
-                self.currentNozzle(null);
-                console.log("[NLT] onBeforeBinding end (missing settings)");
-                return;
-            }
+        self.setToolProfile = function (tool, event) {
+            var profileId = tool.selected_profile_id();
+            return OctoPrint.simpleApiCommand("nozzlelifetracker", "set_tool_profile", {
+                tool_id: tool.tool_id,
+                profile_id: profileId,
+            })
+                .done(function () {
+                    self.fetchStatus();
+                })
+                .fail(function (xhr) {
+                    console.log("[NozzleLifeTracker] set_tool_profile failed", xhr);
+                    self.errorText("Failed to change tool profile.");
+                });
+        };
 
-            var nozzleMap = ko.unwrap(p.nozzles) ||{};
-            var arr = Object.entries(nozzleMap).map(function([id,obj]) {
-                obj.id = id;
-                return obj;
-            }).sort(function(a, b) { return a.retired - b.retired; });
-            
-            // Use safe fallbacks in case a key is undefined on first run
-            self.displayMode(ko.unwrap(p.display_mode) || "runtime" );
-            self.nozzles(arr);
-            self.currentNozzle( ko.unwrap(p.current_nozzle) || null );
-            console.log("[NLT] onBeforeBinding end", {
-                displayMode: self.displayMode(),
-                nozzles_len: self.nozzles().length,
-                currentNozzle: self.currentNozzle()
-            });
+        self.resetTool = function (tool) {
+            return OctoPrint.simpleApiCommand("nozzlelifetracker", "reset_tool", {
+                tool_id: tool.tool_id,
+            })
+                .done(function () {
+                    self.fetchStatus();
+                })
+                .fail(function (xhr) {
+                    console.log("[NozzleLifeTracker] reset_tool failed", xhr);
+                    self.errorText("Failed to reset tool.");
+                });
+        };
+
+        self.onStartupComplete = function () {
+            self.fetchStatus();
+            window.setInterval(function () {
+                self.fetchStatus();
+            }, 10000);
         };
     }
 
-    if (window.__nlt_vm_pushed) {
-        console.warn("[NozzleLifeTracker] ViewModel already registered, skipping second push.");
-    } else {
-        window.__nlt_vm_pushed = true;
-        console.log("[NLT] OCTOPRINT_VIEWMODELS pushed");
-        OCTOPRINT_VIEWMODELS.push({
-            construct: [NozzleLifeTrackerViewModel],
-            dependencies: ["loginStateViewModel", "settingsViewModel"],
-            elements: ["#settings_plugin_nozzlelifetracker", "#sidebar_plugin_nozzlelifetracker"]
-        });
-        console.log("[NLT] VM registered");
-    }
+    OCTOPRINT_VIEWMODELS.push({
+        construct: NozzleLifeTrackerViewModel,
+        dependencies: ["loginStateViewModel", "settingsViewModel"],
+        elements: ["#sidebar_plugin_nozzlelifetracker", "#settings_plugin_nozzlelifetracker"],
+    });
 });
 
 

@@ -1,76 +1,60 @@
-<div id="settings_plugin_nozzlelifetracker" class="nozzlelifetracker section">
-<div id="settings_plugin_nozzlelifetracker_content">
+﻿<div id="settings_plugin_nozzlelifetracker" class="nozzlelifetracker section">
+  <div id="settings_plugin_nozzlelifetracker_content">
+    <h3>Phase 1 Status</h3>
+    <div class="muted" data-bind="text: errorText, visible: errorText"></div>
+    <div class="muted" data-bind="visible: lastGeneratedAt">
+      Last update: <span data-bind="text: lastGeneratedAt"></span>
+    </div>
 
-<div style="font-size:11px; opacity:0.7; margin-bottom:8px;">
-  <strong>NLT Settings:</strong>
-  <span data-bind="text: displayModeSetting"></span>,
-  Nozzles: <span data-bind="text: (nozzles() && nozzles().length) || 0"></span>
+    <div data-bind="visible: !hasTools()">No tool data available.</div>
+    <table class="table table-condensed table-striped" data-bind="visible: hasTools">
+      <thead>
+        <tr>
+          <th>Tool</th>
+          <th>Profile</th>
+          <th>Accumulated (h)</th>
+          <th>Interval (h)</th>
+          <th>% to Interval</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody data-bind="foreach: tools">
+        <tr>
+          <td data-bind="text: tool_id"></td>
+          <td>
+            <div data-bind="text: profile_name"></div>
+            <select class="input-medium"
+                    data-bind="options: $root.profiles, optionsText: 'name', optionsValue: 'id', value: selected_profile_id, event: { change: $root.setToolProfile }"></select>
+          </td>
+          <td data-bind="text: accumulated_hours"></td>
+          <td data-bind="text: interval_hours"></td>
+          <td data-bind="text: percent_to_interval + '%' "></td>
+          <td data-bind="text: is_overdue ? 'Overdue' : 'OK'"></td>
+          <td>
+            <button class="btn" data-bind="click: $root.resetTool">Reset</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Profiles (Phase 2)</h3>
+    <p>Profile create/edit/delete will be added in Phase 2.</p>
+    <table class="table table-condensed" data-bind="visible: profiles().length > 0">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Interval (h)</th>
+        </tr>
+      </thead>
+      <tbody data-bind="foreach: profiles">
+        <tr>
+          <td data-bind="text: id"></td>
+          <td data-bind="text: name"></td>
+          <td data-bind="text: interval_hours"></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </div>
-
-<!-- Minimal table to visualize data -->
-<table class="table table-condensed">
-  <thead>
-    <tr><th>Name</th><th>Retired?</th></tr>
-  </thead>
-  <tbody data-bind="foreach: nozzles">
-    <tr>
-      <td data-bind="text: name || id"></td>
-      <td data-bind="text: retired ? 'Yes' : 'No'"></td>
-    </tr>
-  </tbody>
-</table>
-
-<div data-bind="visible: hasData()">
-  <h3>Nozzle Manager</h3>
-  <table>
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th>Size</th>
-        <th>Material</th>
-        <th>Expected Life (h)</th>
-        <th>Runtime (h)</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody data-bind="foreach: nozzles">
-      <tr data-bind="css: { retired: retired }">
-        <td><input data-bind="value: name" type="text" /></td>
-        <td data-bind="text: size"></td>
-        <td data-bind="text: material"></td>
-        <td><input type="number" min="0" step="0.1" data-bind="value: expected_life" /></td>
-        <td data-bind="text: runtime.toFixed(2)"></td>
-        <td>
-          <button data-bind="click: $parent.setDefault, enable: !retired()">Set Default</button>
-          <button data-bind="click: $parent.confirmRetire, enable: !retired()">Retire</button>
-        </td>
-      </tr>
-    </tbody>
-  </table>
-
-  <h3>Plugin Settings</h3>
-  <label>
-    <input type="checkbox" data-bind="checked: promptBeforePrint" />
-    Prompt before each print
-  </label>
-  <br/>
-  <label>
-    Status Display:
-    <select data-bind="value: displayModeSetting">
-      <option value="circle">Circle</option>
-      <option value="bar">Bar</option>
-      <option value="both">Both</option>
-    </select>
-  </label>
-
-  <h3>Print Log</h3>
-  <button class="btn btn-primary" data-bind="click: exportLog">Export CSV</button>
-</div>
-</div>
-
-
-
-
-
-
-
