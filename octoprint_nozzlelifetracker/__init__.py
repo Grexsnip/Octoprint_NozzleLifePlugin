@@ -34,8 +34,6 @@ except ImportError:
 import time
 import threading
 import uuid
-<<<<<<< ours
-<<<<<<< ours
 try:
     from flask import make_response, request, jsonify
 except ImportError:
@@ -46,12 +44,6 @@ except ImportError:
 
     def jsonify(*args, **kwargs):
         raise RuntimeError("Flask is required for JSON responses")
-=======
-from flask import make_response
->>>>>>> theirs
-=======
-from flask import make_response, request
->>>>>>> theirs
 import csv
 from .phase1_pure import (
     compute_elapsed_seconds,
@@ -76,6 +68,10 @@ DEFAULT_PROFILE_INTERVAL_HOURS = 100.0
 DEFAULT_TOOL_ID = "T0"
 PHASE1_PERSIST_INTERVAL_SECONDS = 300
 PHASE1_PERSIST_CHECK_INTERVAL_SECONDS = 30
+PHASE1_TICK_SECONDS = 5
+PHASE1_PERSIST_SECONDS = 60
+PHASE1_PERSIST_INTERVAL_SECONDS = PHASE1_PERSIST_SECONDS
+PHASE1_PERSIST_CHECK_INTERVAL_SECONDS = PHASE1_TICK_SECONDS
 
 class NozzleLifeTrackerPlugin(StartupPlugin,
                               ShutdownPlugin,
@@ -187,50 +183,17 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
                 self._phase1_handle_print_start_or_resume_locked()
                 self._print_start_time = time.time()
 
-<<<<<<< ours
             elif event == "PrintResumed":
                 # Resume timing after a paused print
-<<<<<<< ours
                 self._phase1_handle_print_start_or_resume_locked()
-=======
->>>>>>> theirs
                 self._print_start_time = time.time()
 
             elif event == "PrintPaused":
                 # Persist elapsed runtime up to the pause point
-<<<<<<< ours
                 self._phase1_handle_print_pause_or_stop_locked(force_persist=True)
                 if self._settings.get(["legacy_runtime_enabled"]):
                     self._accumulate_runtime(payload)
                 self._print_start_time = None
-=======
-                self._accumulate_runtime(payload)
-                self._print_start_time = None
-
-            elif event in ["PrintDone", "PrintCancelled", "PrintFailed"]:
-                self._accumulate_runtime(payload)
->>>>>>> theirs
-=======
-            elif event in ["PrintDone", "PrintCancelled", "PrintFailed"]:
-                if self._print_start_time and self._current_nozzle:
-                    elapsed = (time.time() - self._print_start_time) / 3600.0
-                    nozzle_id = self._current_nozzle
-                    if nozzle_id in self._nozzles:
-                        self._nozzles[nozzle_id].setdefault("runtime", 0.0)
-                        self._nozzles[nozzle_id]['runtime'] += elapsed
-
-                    log_entry = {
-                        "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
-                        "nozzle_id": nozzle_id,
-                        "duration": elapsed,
-                        "file": payload.get('name', 'Unknown'),
-                        "nozzle_name": self._nozzles[nozzle_id].get("name", nozzle_id)
-                    }
-                    self._print_log.append(log_entry)
-                    self._settings.set(["nozzles"], self._nozzles)
-                    self._settings.set(["print_log"], self._print_log)
-                    self._settings.save()
->>>>>>> theirs
 
             elif event in ["PrintDone", "PrintCancelled", "PrintFailed"]:
                 self._phase1_handle_print_pause_or_stop_locked(force_persist=True)
@@ -380,7 +343,6 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
 
     def get_api_status(self):
         with self._lock:
-            self._ensure_phase1_settings(save=False)
             return build_status_payload(
                 self._nozzle_profiles,
                 self._tool_state,
