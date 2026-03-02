@@ -34,6 +34,8 @@ except ImportError:
 import time
 import threading
 import uuid
+<<<<<<< ours
+<<<<<<< ours
 try:
     from flask import make_response, request, jsonify
 except ImportError:
@@ -44,6 +46,12 @@ except ImportError:
 
     def jsonify(*args, **kwargs):
         raise RuntimeError("Flask is required for JSON responses")
+=======
+from flask import make_response
+>>>>>>> theirs
+=======
+from flask import make_response, request
+>>>>>>> theirs
 import csv
 from .phase1_pure import (
     compute_elapsed_seconds,
@@ -179,49 +187,56 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
                 self._phase1_handle_print_start_or_resume_locked()
                 self._print_start_time = time.time()
 
+<<<<<<< ours
             elif event == "PrintResumed":
                 # Resume timing after a paused print
+<<<<<<< ours
                 self._phase1_handle_print_start_or_resume_locked()
+=======
+>>>>>>> theirs
                 self._print_start_time = time.time()
 
             elif event == "PrintPaused":
                 # Persist elapsed runtime up to the pause point
+<<<<<<< ours
                 self._phase1_handle_print_pause_or_stop_locked(force_persist=True)
                 if self._settings.get(["legacy_runtime_enabled"]):
                     self._accumulate_runtime(payload)
                 self._print_start_time = None
+=======
+                self._accumulate_runtime(payload)
+                self._print_start_time = None
+
+            elif event in ["PrintDone", "PrintCancelled", "PrintFailed"]:
+                self._accumulate_runtime(payload)
+>>>>>>> theirs
+=======
+            elif event in ["PrintDone", "PrintCancelled", "PrintFailed"]:
+                if self._print_start_time and self._current_nozzle:
+                    elapsed = (time.time() - self._print_start_time) / 3600.0
+                    nozzle_id = self._current_nozzle
+                    if nozzle_id in self._nozzles:
+                        self._nozzles[nozzle_id].setdefault("runtime", 0.0)
+                        self._nozzles[nozzle_id]['runtime'] += elapsed
+
+                    log_entry = {
+                        "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
+                        "nozzle_id": nozzle_id,
+                        "duration": elapsed,
+                        "file": payload.get('name', 'Unknown'),
+                        "nozzle_name": self._nozzles[nozzle_id].get("name", nozzle_id)
+                    }
+                    self._print_log.append(log_entry)
+                    self._settings.set(["nozzles"], self._nozzles)
+                    self._settings.set(["print_log"], self._print_log)
+                    self._settings.save()
+>>>>>>> theirs
 
             elif event in ["PrintDone", "PrintCancelled", "PrintFailed"]:
                 self._phase1_handle_print_pause_or_stop_locked(force_persist=True)
                 if self._settings.get(["legacy_runtime_enabled"]):
                     self._accumulate_runtime(payload)
                 self._print_start_time = None
-
-    def _accumulate_runtime(self, payload):
-        if not self._print_start_time or not self._current_nozzle:
-            return
-
-        nozzle_id = self._current_nozzle
-        if nozzle_id not in self._nozzles:
-            return
-
-        safe_payload = payload or {}
-        elapsed = (time.time() - self._print_start_time) / 3600.0
-
-        self._nozzles[nozzle_id].setdefault("runtime", 0.0)
-        self._nozzles[nozzle_id]["runtime"] += elapsed
-
-        log_entry = {
-            "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
-            "nozzle_id": nozzle_id,
-            "duration": elapsed,
-            "file": safe_payload.get("name", "Unknown"),
-            "nozzle_name": self._nozzles[nozzle_id].get("name", nozzle_id)
-        }
-        self._print_log.append(log_entry)
-        self._settings.set(["nozzles"], self._nozzles)
-        self._settings.set(["print_log"], self._print_log)
-        self._settings.save()
 
     ##~~ SimpleApiPlugin (for frontend interaction)
     def is_api_protected(self):
