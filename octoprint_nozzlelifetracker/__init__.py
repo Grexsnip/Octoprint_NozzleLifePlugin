@@ -1,4 +1,4 @@
-# NozzleLifeTracker Plugin - OctoPrint Plugin Scaffold
+﻿# NozzleLifeTracker Plugin - OctoPrint Plugin Scaffold
 
 try:
     from octoprint.plugin import (
@@ -59,7 +59,7 @@ from .phase1_settings import (
 )
 
 __plugin_name__ = "Nozzle Life Tracker"
-__plugin_version__ = "0.2.10"
+__plugin_version__ = "0.2.11"
 __plugin_pythoncompat__ = ">=3.7,<3.12"
 __plugin_octoprint_version__ = ">=1.9,<2"
 

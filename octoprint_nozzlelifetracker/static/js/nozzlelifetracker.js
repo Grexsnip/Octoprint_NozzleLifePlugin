@@ -19,10 +19,18 @@ $(function () {
                     var profiles = (response && response.profiles) || [];
                     var tools = (response && response.tools) || [];
                     var meta = (response && response.meta) || {};
+                    var previousToolsById = {};
+
+                    self.tools().forEach(function (row) {
+                        if (row && row.tool_id && row.selected_profile_id) {
+                            previousToolsById[row.tool_id] = row.selected_profile_id();
+                        }
+                    });
 
                     self.profiles(profiles);
                     self.tools(
                         tools.map(function (tool) {
+                            var selectedProfileId = previousToolsById[tool.tool_id] || tool.profile_id;
                             return {
                                 tool_id: tool.tool_id,
                                 profile_id: tool.profile_id,
@@ -32,7 +40,7 @@ $(function () {
                                 accumulated_hours: tool.accumulated_hours,
                                 percent_to_interval: tool.percent_to_interval,
                                 is_overdue: tool.is_overdue,
-                                selected_profile_id: ko.observable(tool.profile_id),
+                                selected_profile_id: ko.observable(selectedProfileId),
                             };
                         })
                     );
@@ -46,7 +54,9 @@ $(function () {
         };
 
         self.setToolProfile = function (tool, event) {
-            var profileId = tool.selected_profile_id();
+            var profileId = (tool && tool.selected_profile_id && tool.selected_profile_id()) ||
+                (event && event.target && event.target.value) ||
+                tool.profile_id;
             return OctoPrint.simpleApiCommand("nozzlelifetracker", "set_tool_profile", {
                 tool_id: tool.tool_id,
                 profile_id: profileId,
