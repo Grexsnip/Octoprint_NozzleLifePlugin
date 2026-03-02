@@ -58,8 +58,8 @@ from .phase1_settings import (
     normalize_tool_id,
 )
 
-##~~ __plugin_name__ = "Nozzle Life Tracker"
-##~~ __plugin_version__ = "0.2.7"
+__plugin_name__ = "Nozzle Life Tracker"
+__plugin_version__ = "0.2.9"
 __plugin_pythoncompat__ = ">=3.7,<3.12"
 __plugin_octoprint_version__ = ">=1.9,<2"
 
@@ -67,8 +67,6 @@ DEFAULT_PROFILE_ID = "default_0_4_brass"
 DEFAULT_PROFILE_NAME = "0.4 Brass"
 DEFAULT_PROFILE_INTERVAL_HOURS = 100.0
 DEFAULT_TOOL_ID = "T0"
-PHASE1_PERSIST_INTERVAL_SECONDS = 300
-PHASE1_PERSIST_CHECK_INTERVAL_SECONDS = 30
 PHASE1_TICK_SECONDS = 5
 PHASE1_PERSIST_SECONDS = 60
 PHASE1_PERSIST_INTERVAL_SECONDS = PHASE1_PERSIST_SECONDS
