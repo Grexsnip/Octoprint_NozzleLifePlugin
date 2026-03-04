@@ -8,13 +8,15 @@ def test_build_status_payload_basic_structure_from_defaults():
     profiles, tool_state, _ = ensure_phase1_settings(None, None, None)
     payload = build_status_payload(profiles, tool_state, now_ts="2026-02-24T12:00:00Z")
 
-    assert list(payload.keys()) == ["profiles", "tools", "meta"]
+    assert list(payload.keys()) == ["profiles", "tools", "nozzles", "tool_map", "meta"]
     assert isinstance(payload["profiles"], list)
     assert isinstance(payload["tools"], list)
-    assert payload["meta"] == {"generated_at": "2026-02-24T12:00:00Z"}
+    assert isinstance(payload["nozzles"], list)
+    assert isinstance(payload["tool_map"], dict)
+    assert payload["meta"]["generated_at"] == "2026-02-24T12:00:00Z"
 
     default_profile = next(p for p in payload["profiles"] if p["id"] == "default_0_4_brass")
-    assert set(default_profile.keys()) == {"id", "name", "interval_hours", "notes"}
+    assert set(default_profile.keys()) == {"id", "name", "interval_hours", "notes", "default_material"}
     assert default_profile["name"] == "0.4 Brass"
     assert isinstance(default_profile["interval_hours"], float)
 
@@ -28,12 +30,20 @@ def test_build_status_payload_basic_structure_from_defaults():
         "accumulated_hours",
         "percent_to_interval",
         "is_overdue",
+        "active_nozzle_id",
+        "runtime_source",
     }
     assert t0["profile_id"] == "default_0_4_brass"
     assert t0["accumulated_seconds"] == 0
     assert t0["accumulated_hours"] == 0.0
     assert t0["percent_to_interval"] == 0.0
     assert t0["is_overdue"] is False
+    assert t0["active_nozzle_id"] == "nozzle_T0_legacy"
+
+    n0 = next(n for n in payload["nozzles"] if n["id"] == "nozzle_T0_legacy")
+    assert n0["profile_id"] == "default_0_4_brass"
+    assert n0["accumulated_seconds"] == 0
+    assert payload["tool_map"]["T0"]["active_nozzle_id"] == "nozzle_T0_legacy"
 
 
 def test_build_status_payload_percent_rounding_and_overdue_logic():
@@ -113,3 +123,36 @@ def test_build_status_payload_profiles_sorted_by_name():
     # Includes the ensured default profile; verify our chosen ordering rule (name asc).
     names = [p["name"] for p in payload["profiles"]]
     assert names == sorted(names)
+
+
+def test_build_status_payload_reports_duplicate_nozzle_assignment_error_flag():
+    payload = build_status_payload(
+        {
+            "default_0_4_brass": {
+                "id": "default_0_4_brass",
+                "name": "0.4 Brass",
+                "interval_hours": 100.0,
+            }
+        },
+        {
+            "T0": {"tool_id": "T0", "profile_id": "default_0_4_brass", "accumulated_seconds": 0},
+            "T1": {"tool_id": "T1", "profile_id": "default_0_4_brass", "accumulated_seconds": 0},
+        },
+        nozzles={
+            "n1": {
+                "id": "n1",
+                "name": "Shared",
+                "profile_id": "default_0_4_brass",
+                "material": "brass",
+                "size_mm": 0.4,
+                "accumulated_seconds": 0,
+                "retired": False,
+            }
+        },
+        tool_map={
+            "T0": {"active_nozzle_id": "n1"},
+            "T1": {"active_nozzle_id": "n1"},
+        },
+    )
+
+    assert "duplicate_nozzle_assignment" in payload["meta"]["error_flags"]

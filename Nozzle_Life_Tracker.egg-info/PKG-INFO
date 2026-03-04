@@ -1,0 +1,17 @@
+Metadata-Version: 2.4
+Name: Nozzle-Life-Tracker
+Version: 0.3.0
+Summary: Tracks nozzle usage time and displays wear status.
+Home-page: https://github.com/Grexsnip/OctoPrint-NozzleLifeTracker
+Author: Andy Rabin
+Author-email: andy.rabin@gmail.com
+License: AGPLv3
+Requires-Python: >=3.8,<3.12
+License-File: LICENSE
+Dynamic: author
+Dynamic: author-email
+Dynamic: home-page
+Dynamic: license
+Dynamic: license-file
+Dynamic: requires-python
+Dynamic: summary

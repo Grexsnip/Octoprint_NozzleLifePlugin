@@ -1,4 +1,16 @@
 <h3>Phase 1 Status</h3>
+<div class="nlt-dashboard" data-bind="visible: activeNozzle">
+  <strong data-bind="text: 'Active ' + activeToolId() + ' Nozzle'"></strong>
+  <div>
+    <span data-bind="text: activeNozzle() ? activeNozzle().name : ''"></span>
+    <span data-bind="text: activeNozzle() ? '(' + activeNozzle().material + ' ' + activeNozzle().size_mm + 'mm)' : ''"></span>
+  </div>
+  <div data-bind="visible: activeNozzle">
+    <span data-bind="text: activeNozzle() ? activeNozzle().accumulated_hours + 'h' : ''"></span>
+    <span data-bind="text: activeNozzle() ? (' / ' + Math.round((activeNozzle().effective_life_seconds || 0) / 3600.0 * 100) / 100 + 'h') : ''"></span>
+    <span class="nlt-badge nlt-badge-overdue" data-bind="visible: activeNozzle() && activeNozzle().is_overdue">⚠ OVERDUE</span>
+  </div>
+</div>
 <div class="muted" data-bind="text: errorText, visible: errorText"></div>
 <div class="muted" data-bind="visible: lastGeneratedAt">
   Last update: <span data-bind="text: lastGeneratedAt"></span>
@@ -10,6 +22,7 @@
     <tr>
       <th>Tool</th>
       <th>Profile</th>
+      <th>Nozzle</th>
       <th>Accumulated (h)</th>
       <th>Interval (h)</th>
       <th>% to Interval</th>
@@ -24,6 +37,10 @@
         <div data-bind="text: profile_name"></div>
         <select class="input-medium"
                 data-bind="options: $root.profiles, optionsText: 'name', optionsValue: 'id', value: selected_profile_id, event: { change: $root.setToolProfile }"></select>
+      </td>
+      <td>
+        <select class="input-medium"
+                data-bind="options: $root.nozzleOptionsForTool($data), optionsText: 'name', optionsValue: 'id', value: selected_nozzle_id, event: { change: $root.assignNozzle }"></select>
       </td>
       <td data-bind="text: accumulated_hours"></td>
       <td data-bind="text: interval_hours"></td>

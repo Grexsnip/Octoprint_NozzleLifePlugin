@@ -48,18 +48,21 @@ import csv
 from .phase1_pure import (
     compute_elapsed_seconds,
     accumulate_tool_seconds,
+    accumulate_nozzle_seconds,
     extract_tool_id_from_command,
 )
 from .phase1_settings import (
     ensure_phase1_settings,
+    ensure_phase2_settings,
     dedupe_profiles,
     reset_tool_state,
     build_status_payload,
     normalize_tool_id,
+    validate_unique_nozzle_assignments,
 )
 
 __plugin_name__ = "Nozzle Life Tracker"
-__plugin_version__ = "0.2.13"
+__plugin_version__ = "0.3.0"
 __plugin_pythoncompat__ = ">=3.7,<3.12"
 __plugin_octoprint_version__ = ">=1.9,<2"
 
@@ -88,7 +91,9 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         self._print_log = []
         self._nozzle_profiles = {}
         self._tool_state = {}
+        self._tool_map = {}
         self._replacement_log = []
+        self._phase2_error_flags = {}
         self._is_printing = False
         self._last_tick_ts = None
         self._active_tool_id = DEFAULT_TOOL_ID
@@ -150,6 +155,11 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
                     "tool_id": "T0",
                     "profile_id": DEFAULT_PROFILE_ID,
                     "accumulated_seconds": 0
+                }
+            },
+            "tool_map": {
+                "T0": {
+                    "active_nozzle_id": "nozzle_T0_legacy"
                 }
             },
             "replacement_log": []
@@ -220,6 +230,9 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             "status": [],
             "set_tool_profile": ["tool_id", "profile_id"],
             "reset_tool": ["tool_id"],
+            "assign_nozzle": ["tool_id", "nozzle_id"],
+            "create_nozzle": ["name", "profile_id"],
+            "reset_nozzle": ["nozzle_id"],
             "select_nozzle": ["nozzle_id"],
             "get_status": [],
             "get_log": [],
@@ -271,21 +284,77 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
 
             return jsonify(self.get_api_status())
 
-        if command == "select_nozzle":
-            nozzle_id = data.get("nozzle_id")
-            if nozzle_id in self._nozzles and not self._nozzles[nozzle_id].get("retired"):
-                self._current_nozzle = nozzle_id
-                self._settings.set(["default_nozzle_id"], nozzle_id)
-                self._settings.save()
-                return {"success": True}
-            return {"success": False, "error": "Invalid or retired nozzle."}
+        if command == "assign_nozzle":
+            tool_id = normalize_tool_id(data.get("tool_id"))
+            nozzle_id = str(data.get("nozzle_id") or "").strip()
+            if not tool_id:
+                return jsonify({"error": "Invalid tool_id"}), 400
+            if not nozzle_id:
+                return jsonify({"error": "Invalid nozzle_id"}), 400
+            try:
+                self.assign_nozzle(tool_id, nozzle_id)
+            except ValueError as exc:
+                self._logger.debug("Phase2 API assign_nozzle error: %s", exc)
+                return jsonify({"error": str(exc)}), 400
+            return jsonify(self.get_api_status())
+
+        elif command == "create_nozzle":
+            name = str(data.get("name") or "").strip()
+            profile_id = str(data.get("profile_id") or "").strip()
+            if not name:
+                return jsonify({"error": "Missing name"}), 400
+            if not profile_id:
+                return jsonify({"error": "Missing profile_id"}), 400
+            try:
+                nozzle = self.create_nozzle(
+                    name=name,
+                    profile_id=profile_id,
+                    notes=data.get("notes"),
+                    life_seconds=data.get("life_seconds"),
+                    material=data.get("material"),
+                    size_mm=data.get("size_mm"),
+                )
+            except ValueError as exc:
+                self._logger.debug("Phase2 API create_nozzle error: %s", exc)
+                return jsonify({"error": str(exc)}), 400
+            return jsonify({"success": True, "nozzle": nozzle})
+
+        elif command == "reset_nozzle":
+            nozzle_id = str(data.get("nozzle_id") or "").strip()
+            if not nozzle_id:
+                return jsonify({"error": "Invalid nozzle_id"}), 400
+            try:
+                self.reset_nozzle(nozzle_id)
+            except ValueError as exc:
+                self._logger.debug("Phase2 API reset_nozzle error: %s", exc)
+                return jsonify({"error": str(exc)}), 400
+            return jsonify(self.get_api_status())
+
+        elif command == "select_nozzle":
+            # Legacy alias for assigning nozzle to T0.
+            nozzle_id = str(data.get("nozzle_id") or "").strip()
+            if not nozzle_id:
+                return {"success": False, "error": "Invalid or retired nozzle."}
+            try:
+                self.assign_nozzle("T0", nozzle_id)
+            except ValueError:
+                return {"success": False, "error": "Invalid or retired nozzle."}
+            self._current_nozzle = nozzle_id
+            self._settings.set(["default_nozzle_id"], nozzle_id)
+            self._settings.save()
+            return {"success": True}
 
         elif command == "get_status":
+            active_tool = self._active_tool_id or DEFAULT_TOOL_ID
+            active_mapping = self._tool_map.get(active_tool) or {}
+            active_nozzle_id = active_mapping.get("active_nozzle_id")
+            active_nozzle = self._nozzles.get(active_nozzle_id) if active_nozzle_id else {}
             return {
-                "current_nozzle": self._current_nozzle,
-                "runtime": self._nozzles.get(self._current_nozzle, {}).get("runtime", 0),
-                "expected": self._nozzles.get(self._current_nozzle, {}).get("expected_life", 0),
-                "nozzle_name": self._nozzles.get(self._current_nozzle, {}).get("name", self._current_nozzle),
+                "current_tool": active_tool,
+                "current_nozzle": active_nozzle_id,
+                "runtime": (active_nozzle or {}).get("accumulated_seconds", 0),
+                "expected": (active_nozzle or {}).get("life_seconds", 0),
+                "nozzle_name": (active_nozzle or {}).get("name", active_nozzle_id),
                 "prompt_enabled": self._settings.get(["prompt_before_print"]),
                 "display_mode": self._settings.get(["display_mode"])
             }
@@ -295,32 +364,27 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
 
         elif command == "retire_nozzle":
             nozzle_id = data.get("nozzle_id")
-            if nozzle_id in self._nozzles:
-                self._nozzles[nozzle_id]["retired"] = True
-                self._settings.set(["nozzles"], self._nozzles)
-                self._settings.save()
-                return {"success": True}
-            return {"success": False, "error": "Nozzle not found."}
+            try:
+                self.retire_nozzle(nozzle_id)
+            except ValueError:
+                return {"success": False, "error": "Nozzle not found."}
+            return {"success": True}
 
         elif command == "add_nozzle":
+            # Legacy alias: map old add_nozzle semantics into Phase 2 create_nozzle.
             size = data.get("size")
-            material = data.get("material")
-            nozzle_id = str(uuid.uuid4())
-            same_type = [n for n in self._nozzles.values() if n["size"] == size and n["material"] == material]
-            count = len(same_type) + 1
-            default_name = f"{size} {material} #{count}"
-
-            self._nozzles[nozzle_id] = {
-                "size": size,
-                "material": material,
-                "expected_life": 0,
-                "runtime": 0,
-                "retired": False,
-                "name": default_name
-            }
-            self._settings.set(["nozzles"], self._nozzles)
-            self._settings.save()
-            return {"success": True, "nozzle_id": nozzle_id, "name": default_name}
+            material = data.get("material") or "brass"
+            default_name = "{} {} #{}".format(size or "0.4", material, len(self._nozzles) + 1)
+            try:
+                nozzle = self.create_nozzle(
+                    name=default_name,
+                    profile_id=DEFAULT_PROFILE_ID,
+                    material=material,
+                    size_mm=size if size is not None else 0.4,
+                )
+            except ValueError as exc:
+                return {"success": False, "error": str(exc)}
+            return {"success": True, "nozzle_id": nozzle["id"], "name": nozzle["name"]}
 
         elif command == "export_log_csv":
             output = make_response(self._generate_csv())
@@ -345,6 +409,10 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             return build_status_payload(
                 self._nozzle_profiles,
                 self._tool_state,
+                nozzles=self._nozzles,
+                tool_map=self._tool_map,
+                errors=self._phase2_error_flags,
+                active_tool_id=self._active_tool_id,
                 now_ts=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
             )
 
@@ -356,7 +424,9 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         self._print_log = self._settings.get(["print_log"]) or []
         self._nozzle_profiles = self._settings.get(["nozzle_profiles"]) or {}
         self._tool_state = self._settings.get(["tool_state"]) or {}
+        self._tool_map = self._settings.get(["tool_map"]) or {}
         self._replacement_log = self._settings.get(["replacement_log"]) or []
+        self._phase2_error_flags = {}
         if self._active_tool_id is None:
             self._active_tool_id = DEFAULT_TOOL_ID
 
@@ -367,6 +437,90 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
     def get_tool_state(self):
         self._ensure_phase1_settings(save=False)
         return self._tool_state
+
+    def assign_nozzle(self, tool_id, nozzle_id):
+        with self._lock:
+            self._ensure_phase1_settings(save=False)
+            tool_id = normalize_tool_id(tool_id)
+            nozzle_id = str(nozzle_id or "").strip()
+            if not tool_id:
+                raise ValueError("tool_id is required")
+            if not nozzle_id:
+                raise ValueError("nozzle_id is required")
+            if nozzle_id not in self._nozzles:
+                raise ValueError("nozzle_id not found")
+            if self._nozzles[nozzle_id].get("retired"):
+                raise ValueError("nozzle is retired")
+
+            proposed = dict(self._tool_map or {})
+            proposed[tool_id] = {"active_nozzle_id": nozzle_id}
+            conflicts = validate_unique_nozzle_assignments(proposed)
+            if conflicts:
+                raise ValueError("nozzle_id already assigned to another tool")
+
+            self._tool_map = proposed
+            self._tool_state.setdefault(tool_id, self._default_tool_state_entry(tool_id=tool_id))
+            self._tool_state[tool_id]["profile_id"] = self._nozzles[nozzle_id].get("profile_id", DEFAULT_PROFILE_ID)
+            self._phase2_error_flags = {}
+            self._save_phase1_settings(tool_state_only=False)
+            return self._tool_map[tool_id]
+
+    def create_nozzle(self, name, profile_id, notes=None, life_seconds=None, material=None, size_mm=None):
+        with self._lock:
+            self._ensure_phase1_settings(save=False)
+            if profile_id not in self._nozzle_profiles:
+                raise ValueError("profile_id not found")
+
+            nozzle_id = str(uuid.uuid4())
+            nozzle = {
+                "id": nozzle_id,
+                "name": str(name),
+                "profile_id": profile_id,
+                "material": str(material or "brass"),
+                "size_mm": float(size_mm) if size_mm is not None else 0.4,
+                "accumulated_seconds": 0,
+                "retired": False,
+            }
+            if nozzle["size_mm"] <= 0:
+                nozzle["size_mm"] = 0.4
+            if notes is not None:
+                nozzle["notes"] = str(notes)
+            if life_seconds is not None:
+                try:
+                    parsed_life = int(float(life_seconds))
+                except (TypeError, ValueError):
+                    raise ValueError("life_seconds must be a positive integer")
+                if parsed_life <= 0:
+                    raise ValueError("life_seconds must be a positive integer")
+                nozzle["life_seconds"] = parsed_life
+
+            self._nozzles[nozzle_id] = nozzle
+            self._phase2_error_flags = {}
+            self._save_phase1_settings(tool_state_only=False)
+            return nozzle
+
+    def reset_nozzle(self, nozzle_id):
+        with self._lock:
+            self._ensure_phase1_settings(save=False)
+            nozzle_id = str(nozzle_id or "").strip()
+            if nozzle_id not in self._nozzles:
+                raise ValueError("nozzle_id not found")
+            self._nozzles[nozzle_id]["accumulated_seconds"] = 0
+            for tool_id, mapping in (self._tool_map or {}).items():
+                if str((mapping or {}).get("active_nozzle_id") or "") == nozzle_id and tool_id in self._tool_state:
+                    self._tool_state[tool_id]["accumulated_seconds"] = 0
+            self._save_phase1_settings(tool_state_only=False)
+            return self._nozzles[nozzle_id]
+
+    def retire_nozzle(self, nozzle_id):
+        with self._lock:
+            self._ensure_phase1_settings(save=False)
+            nozzle_id = str(nozzle_id or "").strip()
+            if nozzle_id not in self._nozzles:
+                raise ValueError("nozzle_id not found")
+            self._nozzles[nozzle_id]["retired"] = True
+            self._save_phase1_settings(tool_state_only=False)
+            return self._nozzles[nozzle_id]
 
     def set_tool_profile(self, tool_id, profile_id):
         if not tool_id:
@@ -386,7 +540,11 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             )
             state["profile_id"] = profile_id
             self._tool_state[tool_id] = state
-            self._save_phase1_settings(tool_state_only=True)
+            mapping = self._tool_map.get(tool_id) or {}
+            nozzle_id = str(mapping.get("active_nozzle_id") or "").strip()
+            if nozzle_id in self._nozzles:
+                self._nozzles[nozzle_id]["profile_id"] = profile_id
+            self._save_phase1_settings(tool_state_only=False)
             return state
 
     def reset_tool(self, tool_id):
@@ -404,6 +562,10 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
                 default_profile_id=DEFAULT_PROFILE_ID,
             )
             state = self._tool_state[tool_id]
+            mapping = self._tool_map.get(tool_id) or {}
+            nozzle_id = str(mapping.get("active_nozzle_id") or "").strip()
+            if nozzle_id in self._nozzles:
+                self._nozzles[nozzle_id]["accumulated_seconds"] = 0
             self._save_phase1_settings(tool_state_only=False)
             return state
 
@@ -465,10 +627,19 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         }
 
     def _ensure_phase1_settings(self, save=False):
-        normalized_profiles, normalized_tool_state, normalized_replacement_log = ensure_phase1_settings(
+        (
+            normalized_profiles,
+            normalized_tool_state,
+            normalized_replacement_log,
+            normalized_nozzles,
+            normalized_tool_map,
+            phase2_errors,
+        ) = ensure_phase2_settings(
             self._settings.get(["nozzle_profiles"]),
             self._settings.get(["tool_state"]),
             self._settings.get(["replacement_log"]),
+            self._settings.get(["nozzles"]),
+            self._settings.get(["tool_map"]),
             default_profile_id=DEFAULT_PROFILE_ID,
             default_profile_name=DEFAULT_PROFILE_NAME,
             default_interval_hours=DEFAULT_PROFILE_INTERVAL_HOURS,
@@ -481,10 +652,19 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             changed = True
         if self._replacement_log != normalized_replacement_log:
             changed = True
+        if self._nozzles != normalized_nozzles:
+            changed = True
+        if self._tool_map != normalized_tool_map:
+            changed = True
+        if self._phase2_error_flags != phase2_errors:
+            changed = True
 
         self._nozzle_profiles = normalized_profiles
         self._tool_state = normalized_tool_state
         self._replacement_log = normalized_replacement_log
+        self._nozzles = normalized_nozzles
+        self._tool_map = normalized_tool_map
+        self._phase2_error_flags = phase2_errors
         deduped_profiles, deduped_tool_state, dedupe_changed = dedupe_profiles(
             self._nozzle_profiles,
             self._tool_state,
@@ -498,6 +678,8 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         if changed:
             self._settings.set(["nozzle_profiles"], self._nozzle_profiles)
             self._settings.set(["tool_state"], self._tool_state)
+            self._settings.set(["nozzles"], self._nozzles)
+            self._settings.set(["tool_map"], self._tool_map)
             self._settings.set(["replacement_log"], self._replacement_log)
             if save:
                 self._settings.save()
@@ -545,14 +727,35 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             return 0
 
         self._ensure_tool_state_entry_locked(self._active_tool_id)
-        updated_tool_state, changed = accumulate_tool_seconds(
+        mapping = self._tool_map.get(self._active_tool_id) or {}
+        assigned_nozzle_id = str(mapping.get("active_nozzle_id") or "").strip()
+        if not assigned_nozzle_id or assigned_nozzle_id not in self._nozzles:
+            self._phase2_error_flags["missing_tool_assignment"] = {
+                str(self._active_tool_id): True
+            }
+            return delta_seconds
+
+        updated_nozzles, nozzle_changed = accumulate_nozzle_seconds(
+            self._nozzles,
+            assigned_nozzle_id,
+            delta_seconds,
+            default_profile_id=self._tool_state.get(self._active_tool_id, {}).get("profile_id", DEFAULT_PROFILE_ID),
+        )
+        updated_tool_state, tool_changed = accumulate_tool_seconds(
             self._tool_state,
             self._active_tool_id,
             delta_seconds
         )
-        if changed:
+        if nozzle_changed or tool_changed:
+            self._nozzles = updated_nozzles
             self._tool_state = updated_tool_state
+            if assigned_nozzle_id in self._nozzles:
+                self._tool_state[self._active_tool_id]["profile_id"] = self._nozzles[assigned_nozzle_id].get(
+                    "profile_id",
+                    DEFAULT_PROFILE_ID,
+                )
             self._phase1_runtime_dirty = True
+            self._phase2_error_flags = {}
             if persist_if_due:
                 self._maybe_persist_phase1_tool_state_locked(force=False)
         return delta_seconds
@@ -563,10 +766,27 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         if state["profile_id"] not in self._nozzle_profiles:
             state["profile_id"] = DEFAULT_PROFILE_ID
         self._tool_state[tool_id] = state
+        mapping = self._tool_map.get(tool_id) or {}
+        nozzle_id = str(mapping.get("active_nozzle_id") or "").strip()
+        if not nozzle_id or nozzle_id not in self._nozzles:
+            legacy_nozzle_id = "nozzle_{}_legacy".format(tool_id)
+            if legacy_nozzle_id not in self._nozzles:
+                self._nozzles[legacy_nozzle_id] = {
+                    "id": legacy_nozzle_id,
+                    "name": "Legacy {}".format(tool_id),
+                    "profile_id": state["profile_id"],
+                    "material": "brass",
+                    "size_mm": 0.4,
+                    "accumulated_seconds": int(state.get("accumulated_seconds", 0) or 0),
+                    "retired": False,
+                }
+            self._tool_map[tool_id] = {"active_nozzle_id": legacy_nozzle_id}
         return state
 
     def _save_phase1_settings(self, tool_state_only=False):
         self._settings.set(["tool_state"], self._tool_state)
+        self._settings.set(["nozzles"], self._nozzles)
+        self._settings.set(["tool_map"], self._tool_map)
         if not tool_state_only:
             self._settings.set(["replacement_log"], self._replacement_log)
         self._settings.save()

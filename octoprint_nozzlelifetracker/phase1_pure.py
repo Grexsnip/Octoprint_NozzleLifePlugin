@@ -43,6 +43,42 @@ def accumulate_tool_seconds(tool_state, tool_id, delta_seconds, default_profile_
     return updated, True
 
 
+def accumulate_nozzle_seconds(nozzles, nozzle_id, delta_seconds, default_profile_id=DEFAULT_PROFILE_ID):
+    if not nozzle_id:
+        return nozzles or {}, False
+
+    try:
+        delta_seconds = int(delta_seconds)
+    except (TypeError, ValueError):
+        return nozzles or {}, False
+
+    if delta_seconds <= 0:
+        return dict(nozzles or {}), False
+
+    updated = dict(nozzles or {})
+    normalized_nozzle_id = str(nozzle_id).strip()
+    entry = dict(updated.get(normalized_nozzle_id) or {})
+    entry["id"] = str(entry.get("id") or normalized_nozzle_id)
+    entry["name"] = str(entry.get("name") or normalized_nozzle_id)
+    entry["profile_id"] = str(entry.get("profile_id") or default_profile_id)
+    entry["material"] = str(entry.get("material") or "brass")
+    try:
+        size_mm = float(entry.get("size_mm", 0.4))
+    except (TypeError, ValueError):
+        size_mm = 0.4
+    if size_mm <= 0:
+        size_mm = 0.4
+    entry["size_mm"] = size_mm
+    entry["retired"] = bool(entry.get("retired", False))
+    try:
+        current_seconds = int(float(entry.get("accumulated_seconds", 0)))
+    except (TypeError, ValueError):
+        current_seconds = 0
+    entry["accumulated_seconds"] = max(0, current_seconds) + delta_seconds
+    updated[normalized_nozzle_id] = entry
+    return updated, True
+
+
 def extract_tool_id_from_command(cmd):
     if not cmd:
         return None

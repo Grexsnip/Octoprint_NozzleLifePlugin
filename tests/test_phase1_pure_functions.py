@@ -4,6 +4,7 @@ from octoprint_nozzlelifetracker import (
     compute_elapsed_seconds,
     extract_tool_id_from_command,
     accumulate_tool_seconds,
+    accumulate_nozzle_seconds,
 )
 
 
@@ -74,3 +75,12 @@ def test_accumulate_tool_seconds_non_positive_delta_noop(delta_seconds):
 
     assert changed is False
     assert updated == original
+
+
+def test_accumulate_nozzle_seconds_creates_missing_nozzle():
+    updated, changed = accumulate_nozzle_seconds({}, "nozzle_T0_legacy", 10, default_profile_id="p1")
+
+    assert changed is True
+    assert updated["nozzle_T0_legacy"]["id"] == "nozzle_T0_legacy"
+    assert updated["nozzle_T0_legacy"]["profile_id"] == "p1"
+    assert updated["nozzle_T0_legacy"]["accumulated_seconds"] == 10

@@ -14,3 +14,4 @@ venv/
 htmlcov/
 
 diff/
+build_artifacts/

@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 plugin_identifier = "nozzlelifetracker"
 plugin_package = "octoprint_nozzlelifetracker"
 plugin_name = "Nozzle Life Tracker"
-plugin_version = "0.2.13"
+plugin_version = "0.3.0"
 plugin_description = "Tracks nozzle usage time and displays wear status."
 plugin_author = "Andy Rabin"
 plugin_author_email = "andy.rabin@gmail.com"
@@ -41,4 +41,5 @@ setup(
         ]
     },
 )
+
 

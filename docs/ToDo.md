@@ -1,14 +1,6 @@
 # Immediate Actions
-- Finalize Phase 2 architecture plan to transition from tool-based runtime tracking to a nozzle inventory model.
-- Define the `nozzle_id` tracking model and confirm migration expectations from current tool runtime state.
-- Specify tool-to-nozzle assignment and nozzle swap behavior so lifetime is preserved across swaps.
-- Confirm Phase 2 test/governance guardrails for implementation: unit-testable logic, no OctoPrint imports in tests, deterministic minimal changes, and mandatory `python -m pytest -q`.
 
 # Upcoming Tasks
-- Implement `nozzle_id`-based runtime tracking flow.
-- Add nozzle inventory persistence in plugin settings.
-- Support multiple tools with explicit tool -> nozzle assignment.
-- Expose current nozzle on the Dashboard.
 
 # Future Tasks
 - Implement profile CRUD after the inventory model is stable.
@@ -26,3 +18,11 @@
 - Added overdue visual indicator (row styling + badge) in Sidebar and Settings.
 - Prevented committing `__pycache__` artifacts.
 - Applied strict patch version bump discipline for release increments.
+- Finalized Phase 2 architecture plan for transition from tool-based runtime to nozzle inventory (`nozzle_id`) model.
+- Defined `nozzle_id` model details with migration expectations from existing tool runtime state.
+- Specified tool-to-nozzle assignment and swap behavior to preserve lifetime across swaps.
+- Confirmed Phase 2 guardrails: unit-testable logic, no OctoPrint imports in tests, deterministic minimal changes, and mandatory `python -m pytest -q`.
+- Implemented `nozzle_id`-based runtime tracking flow with additive migration/backward compatibility.
+- Added nozzle inventory persistence in plugin settings (`nozzles` + `tool_map`) with normalization/auto-heal.
+- Added support for explicit tool -> nozzle assignment with uniqueness validation.
+- Exposed active tool/nozzle status in UI via minimal dashboard element.
