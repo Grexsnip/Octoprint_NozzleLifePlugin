@@ -39,7 +39,7 @@
       </td>
       <td>
         <select class="input-mini"
-                data-bind="options: $root.nozzleOptionsForTool($data), optionsText: 'name', optionsValue: 'id', value: selected_nozzle_id, event: { change: $root.assignNozzle }"></select>
+                data-bind="options: $root.nozzleOptionsForTool($data), optionsText: $root.nozzleLabel, optionsValue: 'id', value: selected_nozzle_id, event: { change: $root.assignNozzle }"></select>
       </td>
       <td data-bind="text: accumulated_hours + 'h / ' + interval_hours + 'h'"></td>
       <td data-bind="text: percent_to_interval + '%' "></td>
@@ -53,3 +53,4 @@
     </tr>
   </tbody>
 </table>
+

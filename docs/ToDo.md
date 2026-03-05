@@ -26,3 +26,11 @@
 - Added nozzle inventory persistence in plugin settings (`nozzles` + `tool_map`) with normalization/auto-heal.
 - Added support for explicit tool -> nozzle assignment with uniqueness validation.
 - Exposed active tool/nozzle status in UI via minimal dashboard element.
+## 2026-03-05
+- Added nozzle metadata support with normalization defaulting `metadata` to `{}`.
+- Implemented deterministic nozzle ID generation for create-nozzle with collision suffixing.
+- Added/updated nozzle CRUD API behavior: create, reset, retire-only (no delete), and retired-assignment blocking.
+- Enforced retire guardrail to block retiring assigned nozzles with friendly remediation messaging.
+- Added Settings-side Nozzle Inventory management UI with create form, reset/retire actions, and a Show retired toggle.
+- Added robust status meta reporting (`active_tool_id`, `tool_source`, `known_tools`) and unknown-active-tool error flag handling with deterministic auto-heal.
+- Expanded pure-logic pytest coverage for metadata defaults, deterministic ID collision behavior, retire/assign validation, and retired-flag payload coverage.

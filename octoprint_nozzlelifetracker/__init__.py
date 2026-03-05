@@ -33,7 +33,6 @@ except ImportError:
         pass
 import time
 import threading
-import uuid
 try:
     from flask import make_response, request, jsonify
 except ImportError:
@@ -52,17 +51,20 @@ from .phase1_pure import (
     extract_tool_id_from_command,
 )
 from .phase1_settings import (
-    ensure_phase1_settings,
     ensure_phase2_settings,
     dedupe_profiles,
     reset_tool_state,
     build_status_payload,
     normalize_tool_id,
     validate_unique_nozzle_assignments,
+    validate_assign_nozzle_allowed,
+    validate_retire_nozzle_allowed,
+    generate_nozzle_id,
+    RETIRE_ASSIGNED_NOZZLE_MESSAGE,
 )
 
 __plugin_name__ = "Nozzle Life Tracker"
-__plugin_version__ = "0.3.0"
+__plugin_version__ = "0.3.1"
 __plugin_pythoncompat__ = ">=3.7,<3.12"
 __plugin_octoprint_version__ = ">=1.9,<2"
 
@@ -97,6 +99,7 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         self._is_printing = False
         self._last_tick_ts = None
         self._active_tool_id = DEFAULT_TOOL_ID
+        self._active_tool_source = "fallback"
         self._phase1_runtime_dirty = False
         self._last_phase1_persist_ts = 0
         self._persist_worker = None
@@ -313,6 +316,7 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
                     life_seconds=data.get("life_seconds"),
                     material=data.get("material"),
                     size_mm=data.get("size_mm"),
+                    metadata=data.get("metadata"),
                 )
             except ValueError as exc:
                 self._logger.debug("Phase2 API create_nozzle error: %s", exc)
@@ -366,8 +370,8 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             nozzle_id = data.get("nozzle_id")
             try:
                 self.retire_nozzle(nozzle_id)
-            except ValueError:
-                return {"success": False, "error": "Nozzle not found."}
+            except ValueError as exc:
+                return {"success": False, "error": str(exc)}
             return {"success": True}
 
         elif command == "add_nozzle":
@@ -413,6 +417,7 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
                 tool_map=self._tool_map,
                 errors=self._phase2_error_flags,
                 active_tool_id=self._active_tool_id,
+                tool_source=self._active_tool_source,
                 now_ts=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
             )
 
@@ -429,6 +434,8 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         self._phase2_error_flags = {}
         if self._active_tool_id is None:
             self._active_tool_id = DEFAULT_TOOL_ID
+        if not getattr(self, "_active_tool_source", None):
+            self._active_tool_source = "fallback"
 
     def get_profiles(self):
         self._ensure_phase1_settings(save=False)
@@ -443,14 +450,9 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             self._ensure_phase1_settings(save=False)
             tool_id = normalize_tool_id(tool_id)
             nozzle_id = str(nozzle_id or "").strip()
-            if not tool_id:
-                raise ValueError("tool_id is required")
-            if not nozzle_id:
-                raise ValueError("nozzle_id is required")
-            if nozzle_id not in self._nozzles:
-                raise ValueError("nozzle_id not found")
-            if self._nozzles[nozzle_id].get("retired"):
-                raise ValueError("nozzle is retired")
+            allowed, message = validate_assign_nozzle_allowed(tool_id, nozzle_id, self._nozzles, self._tool_map)
+            if not allowed:
+                raise ValueError(message or "Invalid nozzle assignment")
 
             proposed = dict(self._tool_map or {})
             proposed[tool_id] = {"active_nozzle_id": nozzle_id}
@@ -465,13 +467,13 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             self._save_phase1_settings(tool_state_only=False)
             return self._tool_map[tool_id]
 
-    def create_nozzle(self, name, profile_id, notes=None, life_seconds=None, material=None, size_mm=None):
+    def create_nozzle(self, name, profile_id, notes=None, life_seconds=None, material=None, size_mm=None, metadata=None):
         with self._lock:
             self._ensure_phase1_settings(save=False)
             if profile_id not in self._nozzle_profiles:
                 raise ValueError("profile_id not found")
 
-            nozzle_id = str(uuid.uuid4())
+            nozzle_id = generate_nozzle_id(name, self._nozzles.keys())
             nozzle = {
                 "id": nozzle_id,
                 "name": str(name),
@@ -480,6 +482,7 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
                 "size_mm": float(size_mm) if size_mm is not None else 0.4,
                 "accumulated_seconds": 0,
                 "retired": False,
+                "metadata": {},
             }
             if nozzle["size_mm"] <= 0:
                 nozzle["size_mm"] = 0.4
@@ -493,6 +496,12 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
                 if parsed_life <= 0:
                     raise ValueError("life_seconds must be a positive integer")
                 nozzle["life_seconds"] = parsed_life
+            if isinstance(metadata, dict):
+                nozzle["metadata"] = {
+                    str(key): str(value)
+                    for key, value in metadata.items()
+                    if key is not None and value is not None
+                }
 
             self._nozzles[nozzle_id] = nozzle
             self._phase2_error_flags = {}
@@ -518,6 +527,9 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             nozzle_id = str(nozzle_id or "").strip()
             if nozzle_id not in self._nozzles:
                 raise ValueError("nozzle_id not found")
+            allowed, message = validate_retire_nozzle_allowed(nozzle_id, self._tool_map)
+            if not allowed:
+                raise ValueError(message or RETIRE_ASSIGNED_NOZZLE_MESSAGE)
             self._nozzles[nozzle_id]["retired"] = True
             self._save_phase1_settings(tool_state_only=False)
             return self._nozzles[nozzle_id]
@@ -643,6 +655,7 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             default_profile_id=DEFAULT_PROFILE_ID,
             default_profile_name=DEFAULT_PROFILE_NAME,
             default_interval_hours=DEFAULT_PROFILE_INTERVAL_HOURS,
+            active_tool_id=self._active_tool_id,
         )
         changed = False
 
@@ -703,6 +716,7 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
 
     def _phase1_handle_tool_change_locked(self, next_tool_id):
         next_tool_id = str(next_tool_id).upper()
+        self._active_tool_source = "printer"
         now_ts = time.time()
         if self._is_printing:
             self._phase1_tick_locked(now_ts=now_ts, persist_if_due=False)

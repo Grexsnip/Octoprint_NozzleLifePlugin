@@ -40,7 +40,7 @@
       </td>
       <td>
         <select class="input-medium"
-                data-bind="options: $root.nozzleOptionsForTool($data), optionsText: 'name', optionsValue: 'id', value: selected_nozzle_id, event: { change: $root.assignNozzle }"></select>
+                data-bind="options: $root.nozzleOptionsForTool($data), optionsText: $root.nozzleLabel, optionsValue: 'id', value: selected_nozzle_id, event: { change: $root.assignNozzle }"></select>
       </td>
       <td data-bind="text: accumulated_hours"></td>
       <td data-bind="text: interval_hours"></td>
@@ -74,3 +74,72 @@
     </tr>
   </tbody>
 </table>
+
+<h3>Nozzle Inventory</h3>
+<label class="checkbox">
+  <input type="checkbox" data-bind="checked: showRetired" />
+  Show retired
+</label>
+<table class="table table-condensed table-striped" data-bind="visible: hasNozzles()">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Material</th>
+      <th>Size (mm)</th>
+      <th>Profile</th>
+      <th>Accumulated (h)</th>
+      <th>Status</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody data-bind="foreach: filteredNozzles">
+    <tr data-bind="css: { 'nlt-overdue': is_overdue, 'retired': retired }">
+      <td data-bind="text: retired ? (name + ' (retired)') : name"></td>
+      <td data-bind="text: material"></td>
+      <td data-bind="text: size_mm"></td>
+      <td data-bind="text: profile_name"></td>
+      <td data-bind="text: accumulated_hours"></td>
+      <td>
+        <span data-bind="text: is_overdue ? 'Overdue' : 'OK'"></span>
+        <span class="nlt-badge nlt-badge-overdue" data-bind="visible: is_overdue">⚠ OVERDUE</span>
+      </td>
+      <td>
+        <button class="btn btn-mini" data-bind="click: $root.resetNozzle">Reset</button>
+        <button class="btn btn-mini" data-bind="click: $root.retireNozzle, enable: !retired">Retire</button>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<h4>Create Nozzle</h4>
+<div class="control-group">
+  <label>Name</label>
+  <input type="text" class="input-medium" data-bind="value: createNozzleName" />
+</div>
+<div class="control-group">
+  <label>Profile</label>
+  <select class="input-medium"
+          data-bind="options: profiles, optionsText: 'name', optionsValue: 'id', value: createNozzleProfileId"></select>
+</div>
+<div class="control-group">
+  <label>Material</label>
+  <input type="text" class="input-medium" data-bind="value: createNozzleMaterial" />
+</div>
+<div class="control-group">
+  <label>Size (mm)</label>
+  <input type="number" step="0.1" min="0.1" class="input-small" data-bind="value: createNozzleSizeMm" />
+</div>
+<div class="control-group">
+  <label>Notes</label>
+  <input type="text" class="input-xxlarge" data-bind="value: createNozzleNotes" />
+</div>
+<div class="control-group">
+  <label>Life Override (hours)</label>
+  <input type="number" step="0.1" min="0" class="input-small" data-bind="value: createNozzleLifeHours" />
+</div>
+<div class="control-group">
+  <label>Metadata (key=value per line)</label>
+  <textarea class="input-xxlarge" rows="3" data-bind="value: createNozzleMetadata"></textarea>
+</div>
+<button class="btn btn-primary" data-bind="click: createNozzle">Create Nozzle</button>
+

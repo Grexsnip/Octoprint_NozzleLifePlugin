@@ -1,7 +1,12 @@
 from octoprint_nozzlelifetracker.phase1_pure import accumulate_nozzle_seconds
 from octoprint_nozzlelifetracker.phase1_settings import (
+    RETIRE_ASSIGNED_NOZZLE_MESSAGE,
+    build_status_payload,
     ensure_phase2_settings,
+    generate_nozzle_id,
     resolve_effective_life_seconds,
+    validate_assign_nozzle_allowed,
+    validate_retire_nozzle_allowed,
     validate_unique_nozzle_assignments,
 )
 
@@ -94,3 +99,78 @@ def test_effective_life_resolution_override_vs_profile_interval():
 
     assert resolve_effective_life_seconds(nozzle_profile_based, profiles) == 7200
     assert resolve_effective_life_seconds(nozzle_override, profiles) == 9000
+
+
+def test_metadata_defaults_normalization():
+    profiles = {
+        "default_0_4_brass": {"id": "default_0_4_brass", "name": "0.4 Brass", "interval_hours": 100.0},
+    }
+    _, _, _, nozzles, _, _ = ensure_phase2_settings(
+        profiles,
+        {"T0": {"tool_id": "T0", "profile_id": "default_0_4_brass", "accumulated_seconds": 0}},
+        [],
+        {
+            "n1": {
+                "id": "n1",
+                "name": "Nozzle 1",
+                "profile_id": "default_0_4_brass",
+                "material": "brass",
+                "size_mm": 0.4,
+                "accumulated_seconds": 0,
+                "retired": False,
+            }
+        },
+        {"T0": {"active_nozzle_id": "n1"}},
+    )
+
+    assert nozzles["n1"]["metadata"] == {}
+
+
+def test_generate_nozzle_id_is_deterministic_with_collisions():
+    existing = {"my-nozzle", "my-nozzle-2", "my-nozzle-3"}
+    generated = generate_nozzle_id("My Nozzle", existing)
+    assert generated == "my-nozzle-4"
+
+
+def test_retire_nozzle_blocked_when_assigned():
+    allowed, message = validate_retire_nozzle_allowed(
+        "n1",
+        {"T0": {"active_nozzle_id": "n1"}},
+    )
+
+    assert allowed is False
+    assert message == RETIRE_ASSIGNED_NOZZLE_MESSAGE
+
+
+def test_assign_retired_nozzle_is_rejected():
+    allowed, message = validate_assign_nozzle_allowed(
+        "T0",
+        "n1",
+        {"n1": {"id": "n1", "retired": True}},
+        {"T1": {"active_nozzle_id": "n2"}},
+    )
+
+    assert allowed is False
+    assert message == "Cannot assign a retired nozzle."
+
+
+def test_status_payload_includes_retired_flag_for_nozzles():
+    payload = build_status_payload(
+        {"default_0_4_brass": {"id": "default_0_4_brass", "name": "0.4 Brass", "interval_hours": 100.0}},
+        {"T0": {"tool_id": "T0", "profile_id": "default_0_4_brass", "accumulated_seconds": 0}},
+        nozzles={
+            "n1": {
+                "id": "n1",
+                "name": "Retired",
+                "profile_id": "default_0_4_brass",
+                "material": "brass",
+                "size_mm": 0.4,
+                "accumulated_seconds": 0,
+                "retired": True,
+            }
+        },
+        tool_map={"T0": {"active_nozzle_id": "n1"}},
+    )
+
+    nozzles_by_id = {entry["id"]: entry for entry in payload["nozzles"]}
+    assert nozzles_by_id["n1"]["retired"] is True

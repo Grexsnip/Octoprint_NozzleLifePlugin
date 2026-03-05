@@ -69,6 +69,53 @@ def _legacy_nozzle_id_for_tool(tool_id):
     return "nozzle_{}_legacy".format(str(tool_id).upper())
 
 
+def generate_nozzle_id(name, existing_nozzle_ids):
+    existing = set(str(value) for value in (existing_nozzle_ids or []))
+    base = re.sub(r"[^a-z0-9]+", "-", str(name or "").strip().lower()).strip("-")
+    if not base:
+        base = "nozzle"
+    candidate = base
+    suffix = 2
+    while candidate in existing:
+        candidate = "{}-{}".format(base, suffix)
+        suffix += 1
+    return candidate
+
+
+def validate_retire_nozzle_allowed(nozzle_id, tool_map):
+    nozzle_id = str(nozzle_id or "").strip()
+    if not nozzle_id:
+        return False, "Invalid nozzle_id"
+    tool_map_in = tool_map if isinstance(tool_map, dict) else {}
+    for tool_id, mapping in tool_map_in.items():
+        assigned_id = str((mapping if isinstance(mapping, dict) else {}).get("active_nozzle_id") or "").strip()
+        if assigned_id == nozzle_id:
+            return False, RETIRE_ASSIGNED_NOZZLE_MESSAGE
+    return True, None
+
+
+def validate_assign_nozzle_allowed(tool_id, nozzle_id, nozzles, tool_map):
+    normalized_tool = normalize_tool_id(tool_id)
+    if normalized_tool is None:
+        return False, "tool_id is required"
+    normalized_nozzle_id = str(nozzle_id or "").strip()
+    if not normalized_nozzle_id:
+        return False, "nozzle_id is required"
+    nozzles_in = nozzles if isinstance(nozzles, dict) else {}
+    nozzle = nozzles_in.get(normalized_nozzle_id)
+    if not isinstance(nozzle, dict):
+        return False, "nozzle_id not found"
+    if bool(nozzle.get("retired", False)):
+        return False, "Cannot assign a retired nozzle."
+
+    proposed = dict(tool_map or {})
+    proposed[normalized_tool] = {"active_nozzle_id": normalized_nozzle_id}
+    conflicts = validate_unique_nozzle_assignments(proposed)
+    if conflicts:
+        return False, "nozzle_id already assigned to another tool"
+    return True, None
+
+
 def _coerce_life_seconds(value):
     try:
         coerced = int(float(value))
@@ -94,6 +141,7 @@ def _normalize_nozzle_entry(
 
     notes_value = entry.get("notes")
     created_at_value = entry.get("created_at")
+    metadata_value = entry.get("metadata")
 
     normalized = {
         "id": normalized_id,
@@ -103,6 +151,7 @@ def _normalize_nozzle_entry(
         "size_mm": _coerce_positive_float(entry.get("size_mm"), 0.4),
         "accumulated_seconds": _coerce_nonnegative_int(entry.get("accumulated_seconds", 0)),
         "retired": bool(entry.get("retired", False)),
+        "metadata": {},
     }
 
     life_seconds = _coerce_life_seconds(entry.get("life_seconds"))
@@ -113,6 +162,12 @@ def _normalize_nozzle_entry(
         normalized["notes"] = str(notes_value)
     if created_at_value is not None:
         normalized["created_at"] = created_at_value
+    if isinstance(metadata_value, dict):
+        normalized["metadata"] = {
+            str(key): str(value)
+            for key, value in metadata_value.items()
+            if key is not None and value is not None
+        }
 
     return normalized
 
@@ -127,6 +182,7 @@ def _build_legacy_nozzle(tool_id, tool_entry, default_profile_id):
         "size_mm": 0.4,
         "accumulated_seconds": _coerce_nonnegative_int((tool_entry or {}).get("accumulated_seconds", 0)),
         "retired": False,
+        "metadata": {},
     }
 
 
@@ -279,6 +335,7 @@ def ensure_phase2_settings(
     default_profile_id="default_0_4_brass",
     default_profile_name="0.4 Brass",
     default_interval_hours=100.0,
+    active_tool_id=None,
 ):
     profiles_fixed, tool_state_fixed, replacement_fixed = ensure_phase1_settings(
         nozzle_profiles,
@@ -349,8 +406,29 @@ def ensure_phase2_settings(
                 "accumulated_seconds": _coerce_nonnegative_int(nozzle.get("accumulated_seconds", 0)),
             }
 
-    conflicts = validate_unique_nozzle_assignments(tool_map_fixed)
     errors = {}
+    normalized_active_tool = normalize_tool_id(active_tool_id) if active_tool_id is not None else None
+    if normalized_active_tool and normalized_active_tool not in tool_map_fixed:
+        errors["unknown_active_tool"] = normalized_active_tool
+        existing_tool_state = tool_state_fixed.get(normalized_active_tool) or {}
+        legacy_id = _legacy_nozzle_id_for_tool(normalized_active_tool)
+        if legacy_id not in nozzles_fixed:
+            nozzles_fixed[legacy_id] = _build_legacy_nozzle(
+                normalized_active_tool,
+                existing_tool_state,
+                default_profile_id,
+            )
+        tool_map_fixed[normalized_active_tool] = {"active_nozzle_id": legacy_id}
+        tool_state_fixed.setdefault(
+            normalized_active_tool,
+            {
+                "tool_id": normalized_active_tool,
+                "profile_id": str(nozzles_fixed[legacy_id].get("profile_id") or default_profile_id),
+                "accumulated_seconds": _coerce_nonnegative_int(nozzles_fixed[legacy_id].get("accumulated_seconds", 0)),
+            },
+        )
+
+    conflicts = validate_unique_nozzle_assignments(tool_map_fixed)
     if conflicts:
         errors["duplicate_nozzle_assignment"] = conflicts
 
@@ -429,6 +507,7 @@ def build_status_payload(
     tool_map=None,
     errors=None,
     active_tool_id=None,
+    tool_source=None,
     now_ts=None,
 ):
     (
@@ -444,6 +523,7 @@ def build_status_payload(
         [],
         nozzles,
         tool_map,
+        active_tool_id=active_tool_id,
     )
 
     error_flags = {}
@@ -494,6 +574,7 @@ def build_status_payload(
             "retired": bool(nozzle.get("retired", False)),
             "notes": str(nozzle.get("notes") or ""),
             "created_at": nozzle.get("created_at"),
+            "metadata": dict(nozzle.get("metadata") or {}),
         }
         if "life_seconds" in nozzle:
             nozzle_entry["life_seconds"] = _coerce_nonnegative_int(nozzle.get("life_seconds"))
@@ -544,7 +625,31 @@ def build_status_payload(
             }
         )
 
-    active_tool = normalize_tool_id(active_tool_id) if active_tool_id is not None else None
+    reported_active_tool = normalize_tool_id(active_tool_id) if active_tool_id is not None else None
+    raw_known_tools = set()
+    if isinstance(tool_map, dict):
+        for raw_tool_id in tool_map.keys():
+            normalized_tool = normalize_tool_id(raw_tool_id)
+            if normalized_tool:
+                raw_known_tools.add(normalized_tool)
+    known_tools = sorted(tool_map_fixed.keys(), key=_tool_sort_key)
+    active_tool = reported_active_tool
+    resolved_tool_source = "printer"
+    if tool_source in ("printer", "fallback"):
+        resolved_tool_source = tool_source
+    elif active_tool is None:
+        resolved_tool_source = "fallback"
+    if active_tool is None:
+        active_tool = known_tools[0] if known_tools else None
+    elif active_tool not in raw_known_tools and raw_known_tools:
+        error_flags["unknown_active_tool"] = active_tool
+        resolved_tool_source = "fallback"
+        active_tool = known_tools[0] if known_tools else active_tool
+    elif active_tool not in known_tools:
+        error_flags["unknown_active_tool"] = active_tool
+        resolved_tool_source = "fallback"
+        active_tool = known_tools[0] if known_tools else active_tool
+
     active_nozzle_out = None
     if active_tool:
         mapping = tool_map_fixed.get(active_tool) or {}
@@ -586,6 +691,14 @@ def build_status_payload(
             "generated_at": now_ts,
             "error_flags": error_flags,
             "active_tool_id": active_tool,
+            "tool_source": resolved_tool_source,
+            "known_tools": known_tools,
             "active_nozzle": active_nozzle_out,
         },
     }
+import re
+
+
+RETIRE_ASSIGNED_NOZZLE_MESSAGE = (
+    "Create a new nozzle (or pick an existing one), assign it to the tool, then retire the old nozzle."
+)

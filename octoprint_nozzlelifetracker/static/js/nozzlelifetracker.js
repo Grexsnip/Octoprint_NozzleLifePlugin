@@ -10,6 +10,16 @@ $(function () {
         self.toolMap = ko.observable({});
         self.activeToolId = ko.observable("");
         self.activeNozzle = ko.observable(null);
+        self.showRetired = ko.observable(false);
+
+        self.createNozzleName = ko.observable("");
+        self.createNozzleProfileId = ko.observable("");
+        self.createNozzleMaterial = ko.observable("brass");
+        self.createNozzleSizeMm = ko.observable("0.4");
+        self.createNozzleNotes = ko.observable("");
+        self.createNozzleLifeHours = ko.observable("");
+        self.createNozzleMetadata = ko.observable("");
+
         self.lastGeneratedAt = ko.observable("");
         self.errorText = ko.observable("");
 
@@ -20,6 +30,43 @@ $(function () {
         self.hasNozzles = ko.pureComputed(function () {
             return self.nozzles().length > 0;
         });
+
+        self.filteredNozzles = ko.pureComputed(function () {
+            return self.nozzles().filter(function (nozzle) {
+                return self.showRetired() || !nozzle.retired;
+            });
+        });
+
+        self.parseMetadata = function (rawText) {
+            var result = {};
+            var text = (rawText || "").trim();
+            if (!text) {
+                return result;
+            }
+            text.split(/\r?\n/).forEach(function (line) {
+                var trimmed = (line || "").trim();
+                if (!trimmed) {
+                    return;
+                }
+                var idx = trimmed.indexOf("=");
+                if (idx <= 0) {
+                    return;
+                }
+                var key = trimmed.substring(0, idx).trim();
+                var value = trimmed.substring(idx + 1).trim();
+                if (key) {
+                    result[key] = value;
+                }
+            });
+            return result;
+        };
+
+        self.nozzleLabel = function (nozzle) {
+            if (!nozzle) {
+                return "";
+            }
+            return nozzle.retired ? (nozzle.name + " (retired)") : nozzle.name;
+        };
 
         self.fetchStatus = function () {
             return OctoPrint.simpleApiCommand("nozzlelifetracker", "status", {})
@@ -46,6 +93,10 @@ $(function () {
                     self.toolMap(toolMap);
                     self.activeToolId(meta.active_tool_id || "");
                     self.activeNozzle(meta.active_nozzle || null);
+                    if (!self.createNozzleProfileId() && profiles.length > 0) {
+                        self.createNozzleProfileId(profiles[0].id);
+                    }
+
                     self.tools(
                         tools.map(function (tool) {
                             var previous = previousToolsById[tool.tool_id] || {};
@@ -67,6 +118,7 @@ $(function () {
                             };
                         })
                     );
+
                     self.lastGeneratedAt(meta.generated_at || "");
                     if (Object.keys(errors).length > 0) {
                         self.errorText("Status warnings: " + Object.keys(errors).join(", "));
@@ -76,7 +128,7 @@ $(function () {
                 })
                 .fail(function (xhr) {
                     console.log("[NozzleLifeTracker] status fetch failed", xhr);
-                    self.errorText("Failed to load Phase 2 status.");
+                    self.errorText("Failed to load status.");
                 });
         };
 
@@ -101,6 +153,13 @@ $(function () {
             var nozzleId = (tool && tool.selected_nozzle_id && tool.selected_nozzle_id()) ||
                 (event && event.target && event.target.value) ||
                 tool.active_nozzle_id;
+            var selected = self.nozzles().find(function (n) {
+                return n.id === nozzleId;
+            });
+            if (selected && selected.retired) {
+                self.errorText("Cannot assign a retired nozzle.");
+                return $.Deferred().reject().promise();
+            }
             return OctoPrint.simpleApiCommand("nozzlelifetracker", "assign_nozzle", {
                 tool_id: tool.tool_id,
                 nozzle_id: nozzleId,
@@ -110,7 +169,8 @@ $(function () {
                 })
                 .fail(function (xhr) {
                     console.log("[NozzleLifeTracker] assign_nozzle failed", xhr);
-                    self.errorText("Failed to assign nozzle.");
+                    var message = (xhr && xhr.responseJSON && xhr.responseJSON.error) || "Failed to assign nozzle.";
+                    self.errorText(message);
                 });
         };
 
@@ -127,9 +187,83 @@ $(function () {
                 });
         };
 
+        self.resetNozzle = function (nozzle) {
+            return OctoPrint.simpleApiCommand("nozzlelifetracker", "reset_nozzle", {
+                nozzle_id: nozzle.id,
+            })
+                .done(function () {
+                    self.fetchStatus();
+                })
+                .fail(function (xhr) {
+                    console.log("[NozzleLifeTracker] reset_nozzle failed", xhr);
+                    var message = (xhr && xhr.responseJSON && xhr.responseJSON.error) || "Failed to reset nozzle.";
+                    self.errorText(message);
+                });
+        };
+
+        self.retireNozzle = function (nozzle) {
+            return OctoPrint.simpleApiCommand("nozzlelifetracker", "retire_nozzle", {
+                nozzle_id: nozzle.id,
+            })
+                .done(function (response) {
+                    if (response && response.success === false) {
+                        self.errorText(response.error || "Failed to retire nozzle.");
+                        return;
+                    }
+                    self.fetchStatus();
+                })
+                .fail(function (xhr) {
+                    console.log("[NozzleLifeTracker] retire_nozzle failed", xhr);
+                    var message = (xhr && xhr.responseJSON && xhr.responseJSON.error) || "Failed to retire nozzle.";
+                    self.errorText(message);
+                });
+        };
+
+        self.createNozzle = function () {
+            var name = (self.createNozzleName() || "").trim();
+            var profileId = (self.createNozzleProfileId() || "").trim();
+            if (!name || !profileId) {
+                self.errorText("Name and profile are required.");
+                return $.Deferred().reject().promise();
+            }
+
+            var payload = {
+                name: name,
+                profile_id: profileId,
+                material: (self.createNozzleMaterial() || "brass").trim() || "brass",
+                size_mm: self.createNozzleSizeMm() || "0.4",
+                notes: self.createNozzleNotes(),
+                metadata: self.parseMetadata(self.createNozzleMetadata()),
+            };
+
+            var lifeHours = (self.createNozzleLifeHours() || "").trim();
+            if (lifeHours) {
+                var parsed = parseFloat(lifeHours);
+                if (!isNaN(parsed) && parsed > 0) {
+                    payload.life_seconds = Math.round(parsed * 3600.0);
+                }
+            }
+
+            return OctoPrint.simpleApiCommand("nozzlelifetracker", "create_nozzle", payload)
+                .done(function () {
+                    self.createNozzleName("");
+                    self.createNozzleMaterial("brass");
+                    self.createNozzleSizeMm("0.4");
+                    self.createNozzleNotes("");
+                    self.createNozzleLifeHours("");
+                    self.createNozzleMetadata("");
+                    self.fetchStatus();
+                })
+                .fail(function (xhr) {
+                    console.log("[NozzleLifeTracker] create_nozzle failed", xhr);
+                    var message = (xhr && xhr.responseJSON && xhr.responseJSON.error) || "Failed to create nozzle.";
+                    self.errorText(message);
+                });
+        };
+
         self.nozzleOptionsForTool = function (tool) {
             return self.nozzles().filter(function (nozzle) {
-                if (nozzle.retired && nozzle.id !== tool.active_nozzle_id) {
+                if (!self.showRetired() && nozzle.retired && nozzle.id !== tool.active_nozzle_id) {
                     return false;
                 }
                 return true;
