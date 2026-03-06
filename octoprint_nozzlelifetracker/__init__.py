@@ -31,6 +31,7 @@ except ImportError:
 
     class SimpleApiPlugin(object):
         pass
+import os
 import time
 import threading
 try:
@@ -62,9 +63,18 @@ from .phase1_settings import (
     generate_nozzle_id,
     RETIRE_ASSIGNED_NOZZLE_MESSAGE,
 )
+from .runtime_state import (
+    RUNTIME_STATE_FILENAME,
+    apply_runtime_state_to_nozzles,
+    build_runtime_state,
+    has_legacy_runtime_state,
+    load_runtime_state_file,
+    save_runtime_state_file,
+    strip_runtime_state_from_settings,
+)
 
 __plugin_name__ = "Nozzle Life Tracker"
-__plugin_version__ = "0.3.1"
+__plugin_version__ = "0.3.2"
 __plugin_pythoncompat__ = ">=3.7,<3.12"
 __plugin_octoprint_version__ = ">=1.9,<2"
 
@@ -424,18 +434,86 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
     ##~~ Helper Methods
 
     def _load_nozzles(self):
-        self._nozzles = self._settings.get(["nozzles"]) or {}
+        legacy_nozzles = self._settings.get(["nozzles"]) or {}
+        legacy_tool_state = self._settings.get(["tool_state"]) or {}
+        legacy_replacement_log = self._settings.get(["replacement_log"]) or []
+        self._nozzles = legacy_nozzles
         self._current_nozzle = self._settings.get(["default_nozzle_id"])
         self._print_log = self._settings.get(["print_log"]) or []
         self._nozzle_profiles = self._settings.get(["nozzle_profiles"]) or {}
-        self._tool_state = self._settings.get(["tool_state"]) or {}
         self._tool_map = self._settings.get(["tool_map"]) or {}
-        self._replacement_log = self._settings.get(["replacement_log"]) or []
+        self._tool_state = {}
+        self._replacement_log = []
         self._phase2_error_flags = {}
         if self._active_tool_id is None:
             self._active_tool_id = DEFAULT_TOOL_ID
         if not getattr(self, "_active_tool_source", None):
             self._active_tool_source = "fallback"
+        self._load_runtime_state(
+            legacy_tool_state=legacy_tool_state,
+            legacy_replacement_log=legacy_replacement_log,
+            legacy_nozzles=legacy_nozzles,
+        )
+
+    def _runtime_state_path(self):
+        return os.path.join(self.get_plugin_data_folder(), RUNTIME_STATE_FILENAME)
+
+    def _runtime_state_payload(self):
+        return build_runtime_state(self._tool_state, self._replacement_log, self._nozzles)
+
+    def _load_runtime_state(self, legacy_tool_state, legacy_replacement_log, legacy_nozzles):
+        runtime_state_path = self._runtime_state_path()
+        runtime_state, status = load_runtime_state_file(runtime_state_path)
+
+        if status == "loaded":
+            self._logger.debug("Loaded runtime state from %s", runtime_state_path)
+        elif status == "malformed":
+            self._logger.warning("Runtime state file is malformed at %s; using defaults", runtime_state_path)
+        elif has_legacy_runtime_state(legacy_tool_state, legacy_replacement_log, legacy_nozzles):
+            runtime_state = build_runtime_state(legacy_tool_state, legacy_replacement_log, legacy_nozzles)
+            self._logger.info("Migrating legacy runtime state from settings to %s", runtime_state_path)
+            self._apply_runtime_state(runtime_state)
+            if self._save_runtime_state():
+                self._save_settings_state()
+            return
+        else:
+            self._logger.debug("Runtime state file not found at %s; using defaults", runtime_state_path)
+
+        self._apply_runtime_state(runtime_state)
+
+    def _apply_runtime_state(self, runtime_state):
+        normalized_runtime = build_runtime_state(
+            runtime_state.get("tool_state"),
+            runtime_state.get("replacement_log"),
+            apply_runtime_state_to_nozzles(self._nozzles, runtime_state),
+        )
+        self._tool_state = normalized_runtime["tool_state"]
+        self._replacement_log = normalized_runtime["replacement_log"]
+        self._nozzles = apply_runtime_state_to_nozzles(self._nozzles, normalized_runtime)
+
+    def _save_runtime_state(self):
+        runtime_state_path = self._runtime_state_path()
+        try:
+            save_runtime_state_file(runtime_state_path, self._runtime_state_payload())
+        except (OSError, ValueError, TypeError):
+            self._logger.exception("Failed saving runtime state to %s", runtime_state_path)
+            return False
+        self._logger.debug("Saved runtime state to %s", runtime_state_path)
+        return True
+
+    def _save_settings_state(self):
+        sanitized_tool_state, sanitized_replacement_log, sanitized_nozzles = strip_runtime_state_from_settings(
+            self._tool_state,
+            self._replacement_log,
+            self._nozzles,
+        )
+        self._settings.set(["nozzle_profiles"], self._nozzle_profiles)
+        self._settings.set(["tool_state"], sanitized_tool_state)
+        self._settings.set(["nozzles"], sanitized_nozzles)
+        self._settings.set(["tool_map"], self._tool_map)
+        self._settings.set(["replacement_log"], sanitized_replacement_log)
+        self._settings.save()
+        self._logger.debug("Saved stable plugin settings after runtime-state update")
 
     def get_profiles(self):
         self._ensure_phase1_settings(save=False)
@@ -518,7 +596,7 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             for tool_id, mapping in (self._tool_map or {}).items():
                 if str((mapping or {}).get("active_nozzle_id") or "") == nozzle_id and tool_id in self._tool_state:
                     self._tool_state[tool_id]["accumulated_seconds"] = 0
-            self._save_phase1_settings(tool_state_only=False)
+            self._save_phase1_settings(tool_state_only=True)
             return self._nozzles[nozzle_id]
 
     def retire_nozzle(self, nozzle_id):
@@ -578,7 +656,7 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             nozzle_id = str(mapping.get("active_nozzle_id") or "").strip()
             if nozzle_id in self._nozzles:
                 self._nozzles[nozzle_id]["accumulated_seconds"] = 0
-            self._save_phase1_settings(tool_state_only=False)
+            self._save_phase1_settings(tool_state_only=True)
             return state
 
     def hook_gcode_queuing(self, comm_instance, phase, cmd, cmd_type, gcode, *args, **kwargs):
@@ -648,10 +726,10 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             phase2_errors,
         ) = ensure_phase2_settings(
             self._settings.get(["nozzle_profiles"]),
-            self._settings.get(["tool_state"]),
-            self._settings.get(["replacement_log"]),
-            self._settings.get(["nozzles"]),
-            self._settings.get(["tool_map"]),
+            self._tool_state,
+            self._replacement_log,
+            self._nozzles,
+            self._tool_map,
             default_profile_id=DEFAULT_PROFILE_ID,
             default_profile_name=DEFAULT_PROFILE_NAME,
             default_interval_hours=DEFAULT_PROFILE_INTERVAL_HOURS,
@@ -689,13 +767,9 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             changed = True
 
         if changed:
-            self._settings.set(["nozzle_profiles"], self._nozzle_profiles)
-            self._settings.set(["tool_state"], self._tool_state)
-            self._settings.set(["nozzles"], self._nozzles)
-            self._settings.set(["tool_map"], self._tool_map)
-            self._settings.set(["replacement_log"], self._replacement_log)
             if save:
-                self._settings.save()
+                self._save_settings_state()
+                self._save_runtime_state()
 
     def _phase1_handle_print_start_or_resume_locked(self):
         now_ts = time.time()
@@ -793,19 +867,20 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
                     "size_mm": 0.4,
                     "accumulated_seconds": int(state.get("accumulated_seconds", 0) or 0),
                     "retired": False,
+                    "metadata": {},
                 }
             self._tool_map[tool_id] = {"active_nozzle_id": legacy_nozzle_id}
         return state
 
     def _save_phase1_settings(self, tool_state_only=False):
-        self._settings.set(["tool_state"], self._tool_state)
-        self._settings.set(["nozzles"], self._nozzles)
-        self._settings.set(["tool_map"], self._tool_map)
-        if not tool_state_only:
-            self._settings.set(["replacement_log"], self._replacement_log)
-        self._settings.save()
-        self._phase1_runtime_dirty = False
-        self._last_phase1_persist_ts = time.time()
+        runtime_saved = self._save_runtime_state()
+        if not tool_state_only and not runtime_saved:
+            self._logger.warning("Skipping stable settings save because runtime-state persistence failed")
+        if not tool_state_only and runtime_saved:
+            self._save_settings_state()
+        if runtime_saved:
+            self._phase1_runtime_dirty = False
+            self._last_phase1_persist_ts = time.time()
 
     def _maybe_persist_phase1_tool_state_locked(self, force=False):
         if not self._phase1_runtime_dirty:

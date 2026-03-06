@@ -12,6 +12,7 @@ octoprint_nozzlelifetracker/__init__.py
 octoprint_nozzlelifetracker/phase1_pure.py
 octoprint_nozzlelifetracker/phase1_settings.py
 octoprint_nozzlelifetracker/plugin.yaml
+octoprint_nozzlelifetracker/runtime_state.py
 octoprint_nozzlelifetracker/static/css/nozzlelifetracker.css
 octoprint_nozzlelifetracker/static/js/nozzlelifetracker.js
 octoprint_nozzlelifetracker/static/less/nozzlelifetracker.less
@@ -23,3 +24,4 @@ tests/test_phase1_reset_behavior.py
 tests/test_phase1_settings_normalization.py
 tests/test_phase1_status_payload.py
 tests/test_phase2_nozzle_inventory.py
+tests/test_runtime_state.py

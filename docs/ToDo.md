@@ -1,6 +1,12 @@
 # Immediate Actions
+- Add periodic runtime-state snapshots during active prints.
+- Flush runtime state explicitly on shutdown.
+- Expand logging around runtime save/load/snapshot paths.
 
 # Upcoming Tasks
+- Add broad try/except guards around event handlers and API entrypoints.
+- Harden API input validation.
+- Improve JavaScript-side error handling.
 
 # Future Tasks
 - Implement profile CRUD after the inventory model is stable.
@@ -34,3 +40,8 @@
 - Added Settings-side Nozzle Inventory management UI with create form, reset/retire actions, and a Show retired toggle.
 - Added robust status meta reporting (`active_tool_id`, `tool_source`, `known_tools`) and unknown-active-tool error flag handling with deterministic auto-heal.
 - Expanded pure-logic pytest coverage for metadata defaults, deterministic ID collision behavior, retire/assign validation, and retired-flag payload coverage.
+## 2026-03-06
+- Moved mutable runtime tracking persistence from plugin settings into `runtime_state.json` in the plugin data folder.
+- Added atomic runtime-state save/load helpers with resilient missing/malformed file handling and legacy settings migration.
+- Preserved settings-backed inventory/config while keeping runtime accumulation state in the dedicated runtime-state file.
+- Added pure tests for runtime-state defaults, round-trip persistence, atomic write cleanup, and legacy settings migration helpers.
