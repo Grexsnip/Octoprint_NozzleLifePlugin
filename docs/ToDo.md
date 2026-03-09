@@ -1,7 +1,4 @@
 # Immediate Actions
-- Add periodic runtime-state snapshots during active prints.
-- Flush runtime state explicitly on shutdown.
-- Expand logging around runtime save/load/snapshot paths.
 
 # Upcoming Tasks
 - Add broad try/except guards around event handlers and API entrypoints.
@@ -45,3 +42,7 @@
 - Added atomic runtime-state save/load helpers with resilient missing/malformed file handling and legacy settings migration.
 - Preserved settings-backed inventory/config while keeping runtime accumulation state in the dedicated runtime-state file.
 - Added pure tests for runtime-state defaults, round-trip persistence, atomic write cleanup, and legacy settings migration helpers.
+## 2026-03-09
+- Added periodic active-print runtime-state snapshots on the existing 60-second persistence boundary.
+- Added explicit runtime-state flush during OctoPrint shutdown using the existing persistence helper path.
+- Expanded runtime save/load/snapshot logging for startup load, periodic snapshots, and shutdown flush behavior.

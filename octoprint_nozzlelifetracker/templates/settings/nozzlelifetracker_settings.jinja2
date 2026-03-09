@@ -75,7 +75,10 @@
   </tbody>
 </table>
 
-<h3>Nozzle Inventory</h3>
+<div class="clearfix">
+  <button type="button" class="btn btn-primary pull-right" data-bind="click: openCreateNozzleModal">Create Nozzle</button>
+  <h3>Nozzle Inventory</h3>
+</div>
 <label class="checkbox">
   <input type="checkbox" data-bind="checked: showRetired" />
   Show retired
@@ -111,35 +114,46 @@
   </tbody>
 </table>
 
-<h4>Create Nozzle</h4>
-<div class="control-group">
-  <label>Name</label>
-  <input type="text" class="input-medium" data-bind="value: createNozzleName" />
+<div id="nlt_create_nozzle_modal" class="modal hide fade" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-header">
+    <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+    <h3>Create Nozzle</h3>
+  </div>
+  <div class="modal-body">
+    <div class="alert alert-error" data-bind="visible: createNozzleErrorText, text: createNozzleErrorText"></div>
+    <div class="control-group">
+      <label>Name</label>
+      <input type="text" class="input-medium" data-bind="value: createNozzleName" />
+    </div>
+    <div class="control-group">
+      <label>Profile</label>
+      <select class="input-medium"
+              data-bind="options: profiles, optionsText: 'name', optionsValue: 'id', value: createNozzleProfileId"></select>
+    </div>
+    <div class="control-group">
+      <label>Material</label>
+      <input type="text" class="input-medium" data-bind="value: createNozzleMaterial" />
+    </div>
+    <div class="control-group">
+      <label>Size (mm)</label>
+      <input type="number" step="0.1" min="0.1" class="input-small" data-bind="value: createNozzleSizeMm" />
+    </div>
+    <div class="control-group">
+      <label>Notes</label>
+      <input type="text" class="input-xxlarge" data-bind="value: createNozzleNotes" />
+    </div>
+    <div class="control-group">
+      <label>Life Override (hours)</label>
+      <input type="number" step="0.1" min="0" class="input-small" data-bind="value: createNozzleLifeHours" />
+    </div>
+    <div class="control-group">
+      <label>Metadata (key=value per line)</label>
+      <textarea class="input-xxlarge" rows="3" data-bind="value: createNozzleMetadata"></textarea>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn" data-dismiss="modal" data-bind="click: closeCreateNozzleModal">Cancel</button>
+    <button type="button" class="btn btn-primary" data-bind="click: createNozzle, enable: canCreateNozzle">Create</button>
+  </div>
 </div>
-<div class="control-group">
-  <label>Profile</label>
-  <select class="input-medium"
-          data-bind="options: profiles, optionsText: 'name', optionsValue: 'id', value: createNozzleProfileId"></select>
-</div>
-<div class="control-group">
-  <label>Material</label>
-  <input type="text" class="input-medium" data-bind="value: createNozzleMaterial" />
-</div>
-<div class="control-group">
-  <label>Size (mm)</label>
-  <input type="number" step="0.1" min="0.1" class="input-small" data-bind="value: createNozzleSizeMm" />
-</div>
-<div class="control-group">
-  <label>Notes</label>
-  <input type="text" class="input-xxlarge" data-bind="value: createNozzleNotes" />
-</div>
-<div class="control-group">
-  <label>Life Override (hours)</label>
-  <input type="number" step="0.1" min="0" class="input-small" data-bind="value: createNozzleLifeHours" />
-</div>
-<div class="control-group">
-  <label>Metadata (key=value per line)</label>
-  <textarea class="input-xxlarge" rows="3" data-bind="value: createNozzleMetadata"></textarea>
-</div>
-<button class="btn btn-primary" data-bind="click: createNozzle">Create Nozzle</button>
 

@@ -19,6 +19,7 @@ $(function () {
         self.createNozzleNotes = ko.observable("");
         self.createNozzleLifeHours = ko.observable("");
         self.createNozzleMetadata = ko.observable("");
+        self.createNozzleErrorText = ko.observable("");
 
         self.lastGeneratedAt = ko.observable("");
         self.errorText = ko.observable("");
@@ -36,6 +37,31 @@ $(function () {
                 return self.showRetired() || !nozzle.retired;
             });
         });
+
+        self.canCreateNozzle = ko.pureComputed(function () {
+            return !!(self.createNozzleName() || "").trim() && !!(self.createNozzleProfileId() || "").trim();
+        });
+
+        self.resetCreateNozzleForm = function () {
+            var profiles = self.profiles();
+            self.createNozzleName("");
+            self.createNozzleProfileId(profiles.length > 0 ? profiles[0].id : "");
+            self.createNozzleMaterial("brass");
+            self.createNozzleSizeMm("0.4");
+            self.createNozzleNotes("");
+            self.createNozzleLifeHours("");
+            self.createNozzleMetadata("");
+            self.createNozzleErrorText("");
+        };
+
+        self.openCreateNozzleModal = function () {
+            self.resetCreateNozzleForm();
+            $("#nlt_create_nozzle_modal").modal("show");
+        };
+
+        self.closeCreateNozzleModal = function () {
+            $("#nlt_create_nozzle_modal").modal("hide");
+        };
 
         self.parseMetadata = function (rawText) {
             var result = {};
@@ -223,7 +249,7 @@ $(function () {
             var name = (self.createNozzleName() || "").trim();
             var profileId = (self.createNozzleProfileId() || "").trim();
             if (!name || !profileId) {
-                self.errorText("Name and profile are required.");
+                self.createNozzleErrorText("Name and profile are required.");
                 return $.Deferred().reject().promise();
             }
 
@@ -246,18 +272,13 @@ $(function () {
 
             return OctoPrint.simpleApiCommand("nozzlelifetracker", "create_nozzle", payload)
                 .done(function () {
-                    self.createNozzleName("");
-                    self.createNozzleMaterial("brass");
-                    self.createNozzleSizeMm("0.4");
-                    self.createNozzleNotes("");
-                    self.createNozzleLifeHours("");
-                    self.createNozzleMetadata("");
+                    self.closeCreateNozzleModal();
                     self.fetchStatus();
                 })
                 .fail(function (xhr) {
                     console.log("[NozzleLifeTracker] create_nozzle failed", xhr);
                     var message = (xhr && xhr.responseJSON && xhr.responseJSON.error) || "Failed to create nozzle.";
-                    self.errorText(message);
+                    self.createNozzleErrorText(message);
                 });
         };
 
@@ -271,6 +292,9 @@ $(function () {
         };
 
         self.onStartupComplete = function () {
+            $("#nlt_create_nozzle_modal").on("hidden hidden.bs.modal", function () {
+                self.resetCreateNozzleForm();
+            });
             self.fetchStatus();
             window.setInterval(function () {
                 self.fetchStatus();
