@@ -70,11 +70,12 @@ from .runtime_state import (
     has_legacy_runtime_state,
     load_runtime_state_file,
     save_runtime_state_file,
+    should_snapshot_runtime_state,
     strip_runtime_state_from_settings,
 )
 
 __plugin_name__ = "Nozzle Life Tracker"
-__plugin_version__ = "0.3.2"
+__plugin_version__ = "0.3.3"
 __plugin_pythoncompat__ = ">=3.7,<3.12"
 __plugin_octoprint_version__ = ">=1.9,<2"
 
@@ -778,6 +779,13 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         if not self._active_tool_id:
             self._active_tool_id = DEFAULT_TOOL_ID
         self._ensure_tool_state_entry_locked(self._active_tool_id)
+        if not self._is_printing:
+            self._last_phase1_persist_ts = now_ts
+            self._logger.debug(
+                "Active print tracking started for %s; runtime snapshots enabled every %ss",
+                self._active_tool_id,
+                PHASE1_PERSIST_INTERVAL_SECONDS,
+            )
         self._is_printing = True
         self._last_tick_ts = now_ts
 
@@ -881,18 +889,31 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
         if runtime_saved:
             self._phase1_runtime_dirty = False
             self._last_phase1_persist_ts = time.time()
+        return runtime_saved
 
     def _maybe_persist_phase1_tool_state_locked(self, force=False):
-        if not self._phase1_runtime_dirty:
-            return False
-
         now_ts = time.time()
-        due = force or (now_ts - self._last_phase1_persist_ts) >= PHASE1_PERSIST_INTERVAL_SECONDS
-        if not due:
+        should_snapshot = should_snapshot_runtime_state(
+            is_printing=self._is_printing,
+            is_dirty=self._phase1_runtime_dirty,
+            last_snapshot_ts=self._last_phase1_persist_ts,
+            now_ts=now_ts,
+            interval_seconds=PHASE1_PERSIST_INTERVAL_SECONDS,
+            force=force,
+        )
+        if not should_snapshot:
             return False
 
-        self._save_phase1_settings(tool_state_only=True)
-        return True
+        runtime_saved = self._save_phase1_settings(tool_state_only=True)
+        if runtime_saved and force:
+            self._logger.debug("Saved runtime state at print-state transition")
+        elif runtime_saved:
+            self._logger.debug(
+                "Saved active-print runtime snapshot for %s at %ss boundary",
+                self._active_tool_id,
+                PHASE1_PERSIST_INTERVAL_SECONDS,
+            )
+        return runtime_saved
 
     def _start_phase1_persist_worker(self):
         if self._persist_worker and self._persist_worker.is_alive():

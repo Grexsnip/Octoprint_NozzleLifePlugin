@@ -4,6 +4,7 @@ from octoprint_nozzlelifetracker.runtime_state import (
     has_legacy_runtime_state,
     load_runtime_state_file,
     save_runtime_state_file,
+    should_snapshot_runtime_state,
     strip_runtime_state_from_settings,
 )
 
@@ -111,3 +112,67 @@ def test_legacy_settings_runtime_migration_helpers():
     assert sanitized_tool_state["T0"]["accumulated_seconds"] == 0
     assert sanitized_replacement_log == []
     assert sanitized_nozzles["nozzle_T0_legacy"]["accumulated_seconds"] == 0
+
+
+def test_should_snapshot_runtime_state_only_when_actively_printing():
+    should_snapshot = should_snapshot_runtime_state(
+        is_printing=True,
+        is_dirty=True,
+        last_snapshot_ts=100.0,
+        now_ts=160.0,
+        interval_seconds=60,
+    )
+
+    assert should_snapshot is True
+
+
+def test_should_snapshot_runtime_state_not_when_idle():
+    should_snapshot = should_snapshot_runtime_state(
+        is_printing=False,
+        is_dirty=True,
+        last_snapshot_ts=100.0,
+        now_ts=160.0,
+        interval_seconds=60,
+    )
+
+    assert should_snapshot is False
+
+
+def test_should_snapshot_runtime_state_respects_interval_boundary():
+    before_boundary = should_snapshot_runtime_state(
+        is_printing=True,
+        is_dirty=True,
+        last_snapshot_ts=100.0,
+        now_ts=159.0,
+        interval_seconds=60,
+    )
+    at_boundary = should_snapshot_runtime_state(
+        is_printing=True,
+        is_dirty=True,
+        last_snapshot_ts=100.0,
+        now_ts=160.0,
+        interval_seconds=60,
+    )
+
+    assert before_boundary is False
+    assert at_boundary is True
+
+
+def test_should_snapshot_runtime_state_does_not_double_trigger_without_new_interval():
+    first_snapshot = should_snapshot_runtime_state(
+        is_printing=True,
+        is_dirty=True,
+        last_snapshot_ts=100.0,
+        now_ts=160.0,
+        interval_seconds=60,
+    )
+    second_snapshot = should_snapshot_runtime_state(
+        is_printing=True,
+        is_dirty=True,
+        last_snapshot_ts=160.0,
+        now_ts=165.0,
+        interval_seconds=60,
+    )
+
+    assert first_snapshot is True
+    assert second_snapshot is False

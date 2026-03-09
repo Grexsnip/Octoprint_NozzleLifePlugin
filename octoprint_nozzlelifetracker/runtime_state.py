@@ -15,6 +15,37 @@ def default_runtime_state():
     }
 
 
+def should_snapshot_runtime_state(
+    *,
+    is_printing,
+    is_dirty,
+    last_snapshot_ts,
+    now_ts,
+    interval_seconds,
+    force=False,
+):
+    if not is_dirty:
+        return False
+
+    if force:
+        return True
+
+    if not is_printing:
+        return False
+
+    try:
+        last_snapshot_value = float(last_snapshot_ts)
+        now_value = float(now_ts)
+        interval_value = float(interval_seconds)
+    except (TypeError, ValueError):
+        return False
+
+    if last_snapshot_value <= 0 or interval_value <= 0:
+        return False
+
+    return (now_value - last_snapshot_value) >= interval_value
+
+
 def normalize_runtime_state(runtime_state):
     state_in = runtime_state if isinstance(runtime_state, dict) else {}
     tool_state_in = state_in.get("tool_state") if isinstance(state_in.get("tool_state"), dict) else {}
