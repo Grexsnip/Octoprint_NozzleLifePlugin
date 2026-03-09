@@ -75,7 +75,7 @@ from .runtime_state import (
 )
 
 __plugin_name__ = "Nozzle Life Tracker"
-__plugin_version__ = "0.3.3"
+__plugin_version__ = "0.3.4"
 __plugin_pythoncompat__ = ">=3.7,<3.12"
 __plugin_octoprint_version__ = ">=1.9,<2"
 
@@ -127,15 +127,31 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
     def on_shutdown(self):
         worker = getattr(self, "_persist_worker", None)
         stop_event = getattr(self, "_persist_worker_stop", None)
-        if worker is None or stop_event is None:
-            return
 
         try:
-            stop_event.set()
-            if worker.is_alive():
+            if stop_event is not None:
+                stop_event.set()
+            if worker is not None and worker.is_alive():
                 worker.join(timeout=3)
         except Exception:
             self._logger.exception("Error stopping Phase 1 persist worker")
+
+        try:
+            with self._lock:
+                self._ensure_phase1_settings(save=False)
+                was_printing = self._is_printing
+                if was_printing:
+                    self._phase1_tick_locked(now_ts=time.time(), persist_if_due=False)
+                runtime_saved = self._save_phase1_settings(tool_state_only=True)
+                if runtime_saved:
+                    if was_printing:
+                        self._logger.info("Flushed active-print runtime state during shutdown")
+                    else:
+                        self._logger.debug("Flushed runtime state during shutdown")
+                else:
+                    self._logger.warning("Runtime-state flush during shutdown did not complete")
+        except Exception:
+            self._logger.exception("Error flushing runtime state during shutdown")
 
     ##~~ Assets
 
