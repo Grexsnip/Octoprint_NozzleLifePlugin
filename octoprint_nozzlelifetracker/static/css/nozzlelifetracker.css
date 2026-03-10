@@ -88,3 +88,64 @@
   border-radius: 4px;
   background: #f8f9fa;
 }
+
+.nlt-sidebar-tools {
+  margin-top: 8px;
+}
+
+.nlt-tool-card {
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.nlt-tool-card.nlt-overdue {
+  background-color: #fff8e6;
+}
+
+.nlt-tool-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.nlt-tool-line {
+  margin-bottom: 4px;
+}
+
+.nlt-tool-label {
+  display: block;
+  font-size: 11px;
+  line-height: 1.3;
+  text-transform: uppercase;
+  color: #666;
+}
+
+.nlt-tool-value {
+  display: block;
+  line-height: 1.4;
+}
+
+.nlt-tool-control {
+  margin-top: 8px;
+}
+
+.nlt-tool-actions {
+  margin-top: 8px;
+}
+
+.nlt-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nlt-sidebar-tools select,
+.nlt-tool-control select {
+  width: 100%;
+  max-width: none;
+}

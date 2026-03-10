@@ -17,40 +17,35 @@
 </div>
 
 <div data-bind="visible: !hasTools()">No tool data available.</div>
-<table class="table table-condensed table-hover" data-bind="visible: hasTools()">
-  <thead>
-    <tr>
-      <th>Tool</th>
-      <th>Profile</th>
-      <th>Nozzle</th>
-      <th>Usage</th>
-      <th>%</th>
-      <th>State</th>
-      <th>Actions</th>
-    </tr>
-  </thead>
-  <tbody data-bind="foreach: tools">
-    <tr data-bind="css: { 'nlt-overdue': is_overdue }">
-      <td data-bind="text: tool_id"></td>
-      <td>
-        <div data-bind="text: profile_name"></div>
-        <select class="input-mini"
-                data-bind="options: $root.profiles, optionsText: 'name', optionsValue: 'id', value: selected_profile_id, event: { change: $root.setToolProfile }"></select>
-      </td>
-      <td>
-        <select class="input-mini"
-                data-bind="options: $root.nozzleOptionsForTool($data), optionsText: $root.nozzleLabel, optionsValue: 'id', value: selected_nozzle_id, event: { change: $root.assignNozzle }"></select>
-      </td>
-      <td data-bind="text: accumulated_hours + 'h / ' + interval_hours + 'h'"></td>
-      <td data-bind="text: percent_to_interval + '%' "></td>
-      <td>
-        <span data-bind="text: is_overdue ? 'Overdue' : 'OK'"></span>
-        <span class="nlt-badge nlt-badge-overdue" data-bind="visible: is_overdue">⚠ OVERDUE</span>
-      </td>
-      <td>
-        <button class="btn btn-mini" data-bind="click: $root.resetTool">Reset</button>
-      </td>
-    </tr>
-  </tbody>
-</table>
-
+<div class="nlt-sidebar-tools" data-bind="visible: hasTools(), foreach: tools">
+  <div class="nlt-tool-card" data-bind="css: { 'nlt-overdue': is_overdue }">
+    <div class="nlt-tool-card-header">
+      <strong data-bind="text: 'Tool ' + tool_id"></strong>
+      <span class="nlt-badge nlt-badge-overdue" data-bind="visible: is_overdue">⚠ OVERDUE</span>
+    </div>
+    <div class="nlt-tool-line">
+      <span class="nlt-tool-label">Profile</span>
+      <span class="nlt-tool-value nlt-truncate" data-bind="text: profile_name"></span>
+    </div>
+    <div class="nlt-tool-line">
+      <span class="nlt-tool-label">Nozzle</span>
+      <span class="nlt-tool-value nlt-truncate" data-bind="text: $root.nozzleLabel($root.nozzles().find(function (n) { return n.id === selected_nozzle_id(); })) || ''"></span>
+    </div>
+    <div class="nlt-tool-line">
+      <span class="nlt-tool-label">Usage</span>
+      <span class="nlt-tool-value" data-bind="text: accumulated_hours + 'h / ' + interval_hours + 'h'"></span>
+    </div>
+    <div class="nlt-tool-line">
+      <span class="nlt-tool-label">Status</span>
+      <span class="nlt-tool-value" data-bind="text: is_overdue ? 'Overdue' : 'OK'"></span>
+    </div>
+    <div class="nlt-tool-control">
+      <label class="nlt-tool-label">Nozzle</label>
+      <select class="input-block-level"
+              data-bind="options: $root.nozzleOptionsForTool($data), optionsText: $root.nozzleLabel, optionsValue: 'id', value: selected_nozzle_id, event: { change: $root.assignNozzle }"></select>
+    </div>
+    <div class="nlt-tool-actions">
+      <button class="btn btn-mini" data-bind="click: $root.resetTool">Reset</button>
+    </div>
+  </div>
+</div>
