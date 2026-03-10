@@ -149,3 +149,54 @@
   width: 100%;
   max-width: none;
 }
+
+.nlt-settings-status-table {
+  table-layout: fixed;
+}
+
+.nlt-settings-status-table .nlt-col-tool {
+  width: 7%;
+}
+
+.nlt-settings-status-table .nlt-col-profile {
+  width: 21%;
+}
+
+.nlt-settings-status-table .nlt-col-nozzle {
+  width: 29%;
+}
+
+.nlt-settings-status-table .nlt-col-compact {
+  width: 9%;
+}
+
+.nlt-settings-status-table .nlt-col-status {
+  width: 11%;
+}
+
+.nlt-settings-status-table .nlt-col-action {
+  width: 6%;
+}
+
+.nlt-settings-status-table td,
+.nlt-settings-status-table th {
+  vertical-align: top;
+}
+
+.nlt-settings-status-table .nlt-settings-cell-select {
+  min-width: 0;
+}
+
+.nlt-settings-status-table .nlt-settings-cell-select select {
+  width: 100%;
+  max-width: none;
+  margin-top: 4px;
+}
+
+.nlt-settings-status-table .nlt-settings-compact {
+  white-space: nowrap;
+}
+
+.nlt-settings-status-table .nlt-settings-actions {
+  white-space: nowrap;
+}

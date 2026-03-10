@@ -75,7 +75,7 @@ from .runtime_state import (
 )
 
 __plugin_name__ = "Nozzle Life Tracker"
-__plugin_version__ = "0.3.6"
+__plugin_version__ = "0.3.7"
 __plugin_pythoncompat__ = ">=3.7,<3.12"
 __plugin_octoprint_version__ = ">=1.9,<2"
 

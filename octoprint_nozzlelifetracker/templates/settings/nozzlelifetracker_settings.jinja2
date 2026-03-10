@@ -17,7 +17,17 @@
 </div>
 
 <div data-bind="visible: !hasTools()">No tool data available.</div>
-<table class="table table-condensed table-striped" data-bind="visible: hasTools()">
+<table class="table table-condensed table-striped nlt-settings-status-table" data-bind="visible: hasTools()">
+  <colgroup>
+    <col class="nlt-col-tool" />
+    <col class="nlt-col-profile" />
+    <col class="nlt-col-nozzle" />
+    <col class="nlt-col-compact" />
+    <col class="nlt-col-compact" />
+    <col class="nlt-col-compact" />
+    <col class="nlt-col-status" />
+    <col class="nlt-col-action" />
+  </colgroup>
   <thead>
     <tr>
       <th>Tool</th>
@@ -32,25 +42,26 @@
   </thead>
   <tbody data-bind="foreach: tools">
     <tr data-bind="css: { 'nlt-overdue': is_overdue }">
-      <td data-bind="text: tool_id"></td>
-      <td>
-        <div data-bind="text: profile_name"></div>
-        <select class="input-medium"
+      <td class="nlt-settings-compact" data-bind="text: tool_id"></td>
+      <td class="nlt-settings-cell-select">
+        <div class="nlt-truncate" data-bind="text: profile_name, attr: { title: profile_name }"></div>
+        <select class="input-block-level"
                 data-bind="options: $root.profiles, optionsText: 'name', optionsValue: 'id', value: selected_profile_id, event: { change: $root.setToolProfile }"></select>
       </td>
-      <td>
-        <select class="input-medium"
+      <td class="nlt-settings-cell-select">
+        <div class="nlt-truncate" data-bind="text: $root.nozzleLabel($root.nozzles().find(function (n) { return n.id === selected_nozzle_id(); })) || '', attr: { title: $root.nozzleLabel($root.nozzles().find(function (n) { return n.id === selected_nozzle_id(); })) || '' }"></div>
+        <select class="input-block-level"
                 data-bind="options: $root.nozzleOptionsForTool($data), optionsText: $root.nozzleLabel, optionsValue: 'id', value: selected_nozzle_id, event: { change: $root.assignNozzle }"></select>
       </td>
-      <td data-bind="text: accumulated_hours"></td>
-      <td data-bind="text: interval_hours"></td>
-      <td data-bind="text: percent_to_interval + '%' "></td>
-      <td>
+      <td class="nlt-settings-compact" data-bind="text: accumulated_hours"></td>
+      <td class="nlt-settings-compact" data-bind="text: interval_hours"></td>
+      <td class="nlt-settings-compact" data-bind="text: percent_to_interval + '%' "></td>
+      <td class="nlt-settings-compact">
         <span data-bind="text: is_overdue ? 'Overdue' : 'OK'"></span>
         <span class="nlt-badge nlt-badge-overdue" data-bind="visible: is_overdue">⚠ OVERDUE</span>
       </td>
-      <td>
-        <button class="btn" data-bind="click: $root.resetTool">Reset</button>
+      <td class="nlt-settings-actions">
+        <button class="btn btn-mini" data-bind="click: $root.resetTool">Reset</button>
       </td>
     </tr>
   </tbody>
@@ -156,4 +167,3 @@
     <button type="button" class="btn btn-primary" data-bind="click: createNozzle, enable: canCreateNozzle">Create</button>
   </div>
 </div>
-
