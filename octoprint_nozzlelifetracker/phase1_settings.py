@@ -82,6 +82,161 @@ def generate_nozzle_id(name, existing_nozzle_ids):
     return candidate
 
 
+def validate_required_string_field(value, field_name):
+    if not isinstance(value, str):
+        return None, "{} must be a non-empty string".format(field_name)
+    normalized = value.strip()
+    if not normalized:
+        return None, "{} is required".format(field_name)
+    return normalized, None
+
+
+def validate_optional_string_field(value, field_name, default=None):
+    if value is None:
+        return default, None
+    if not isinstance(value, str):
+        return None, "{} must be a string".format(field_name)
+    normalized = value.strip()
+    if not normalized and default is not None:
+        return default, None
+    return normalized, None
+
+
+def validate_positive_float_field(value, field_name, default=None):
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return default, None
+    if isinstance(value, bool):
+        return None, "{} must be a positive number".format(field_name)
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError):
+        return None, "{} must be a positive number".format(field_name)
+    if normalized <= 0:
+        return None, "{} must be a positive number".format(field_name)
+    return normalized, None
+
+
+def validate_positive_int_field(value, field_name, default=None):
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return default, None
+    if isinstance(value, bool):
+        return None, "{} must be a positive integer".format(field_name)
+    try:
+        normalized = int(float(value))
+    except (TypeError, ValueError):
+        return None, "{} must be a positive integer".format(field_name)
+    if normalized <= 0:
+        return None, "{} must be a positive integer".format(field_name)
+    return normalized, None
+
+
+def known_tool_ids(tool_state, tool_map):
+    known = set()
+    for source in (tool_state if isinstance(tool_state, dict) else {}, tool_map if isinstance(tool_map, dict) else {}):
+        for raw_tool_id in source.keys():
+            normalized = normalize_tool_id(raw_tool_id)
+            if normalized is not None:
+                known.add(normalized)
+    return sorted(known)
+
+
+def validate_known_tool_id(tool_id, tool_state, tool_map):
+    normalized_tool, error = validate_required_string_field(tool_id, "tool_id")
+    if error:
+        return None, error
+    normalized_tool = normalize_tool_id(normalized_tool)
+    if normalized_tool is None:
+        return None, "Invalid tool_id"
+    if normalized_tool not in known_tool_ids(tool_state, tool_map):
+        return None, "tool_id not found"
+    return normalized_tool, None
+
+
+def validate_existing_nozzle_id(nozzle_id, nozzles):
+    normalized_nozzle_id, error = validate_required_string_field(nozzle_id, "nozzle_id")
+    if error:
+        return None, error
+    nozzles_in = nozzles if isinstance(nozzles, dict) else {}
+    if normalized_nozzle_id not in nozzles_in:
+        return None, "nozzle_id not found"
+    return normalized_nozzle_id, None
+
+
+def validate_existing_profile_id(profile_id, profiles):
+    normalized_profile_id, error = validate_required_string_field(profile_id, "profile_id")
+    if error:
+        return None, error
+    profiles_in = profiles if isinstance(profiles, dict) else {}
+    if normalized_profile_id not in profiles_in:
+        return None, "profile_id not found"
+    return normalized_profile_id, None
+
+
+def validate_metadata_field(metadata):
+    if metadata is None:
+        return {}, None
+    if not isinstance(metadata, dict):
+        return None, "metadata must be an object"
+    normalized = {}
+    for key, value in metadata.items():
+        if not isinstance(key, str) or not key.strip():
+            return None, "metadata keys must be non-empty strings"
+        if not isinstance(value, str):
+            return None, "metadata values must be strings"
+        normalized[key.strip()] = value
+    return normalized, None
+
+
+def validate_create_nozzle_payload(data, profiles):
+    payload = data if isinstance(data, dict) else {}
+    name, error = validate_required_string_field(payload.get("name"), "name")
+    if error:
+        return None, error
+    profile_id, error = validate_existing_profile_id(payload.get("profile_id"), profiles)
+    if error:
+        return None, error
+    material, error = validate_optional_string_field(payload.get("material"), "material", default="brass")
+    if error:
+        return None, error
+    size_mm, error = validate_positive_float_field(payload.get("size_mm"), "size_mm", default=0.4)
+    if error:
+        return None, error
+    life_seconds, error = validate_positive_int_field(payload.get("life_seconds"), "life_seconds", default=None)
+    if error:
+        return None, error
+    metadata, error = validate_metadata_field(payload.get("metadata"))
+    if error:
+        return None, error
+    notes = payload.get("notes")
+    if notes is not None and not isinstance(notes, str):
+        return None, "notes must be a string"
+    return {
+        "name": name,
+        "profile_id": profile_id,
+        "notes": notes,
+        "life_seconds": life_seconds,
+        "material": material,
+        "size_mm": size_mm,
+        "metadata": metadata,
+    }, None
+
+
+def validate_add_nozzle_payload(data):
+    payload = data if isinstance(data, dict) else {}
+    size, error = validate_positive_float_field(payload.get("size"), "size", default=None)
+    if error:
+        return None, error
+    if size is None:
+        return None, "size is required"
+    material, error = validate_optional_string_field(payload.get("material"), "material", default="brass")
+    if error:
+        return None, error
+    return {
+        "size": size,
+        "material": material,
+    }, None
+
+
 def validate_retire_nozzle_allowed(nozzle_id, tool_map):
     nozzle_id = str(nozzle_id or "").strip()
     if not nozzle_id:

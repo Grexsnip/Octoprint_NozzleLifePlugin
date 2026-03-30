@@ -4,8 +4,15 @@ from octoprint_nozzlelifetracker.phase1_settings import (
     build_status_payload,
     ensure_phase2_settings,
     generate_nozzle_id,
+    known_tool_ids,
     resolve_effective_life_seconds,
+    validate_add_nozzle_payload,
     validate_assign_nozzle_allowed,
+    validate_create_nozzle_payload,
+    validate_existing_nozzle_id,
+    validate_existing_profile_id,
+    validate_known_tool_id,
+    validate_metadata_field,
     validate_retire_nozzle_allowed,
     validate_unique_nozzle_assignments,
 )
@@ -152,6 +159,102 @@ def test_assign_retired_nozzle_is_rejected():
 
     assert allowed is False
     assert message == "Cannot assign a retired nozzle."
+
+
+def test_known_tool_ids_and_validation_reject_unknown_tool():
+    tool_ids = known_tool_ids(
+        {"T0": {"tool_id": "T0"}},
+        {"t1": {"active_nozzle_id": "n1"}},
+    )
+    normalized, error = validate_known_tool_id(
+        "T2",
+        {"T0": {"tool_id": "T0"}},
+        {"t1": {"active_nozzle_id": "n1"}},
+    )
+
+    assert tool_ids == ["T0", "T1"]
+    assert normalized is None
+    assert error == "tool_id not found"
+
+
+def test_create_nozzle_payload_validation_normalizes_valid_input():
+    payload, error = validate_create_nozzle_payload(
+        {
+            "name": "  New Nozzle  ",
+            "profile_id": "p1",
+            "material": "  hardened steel  ",
+            "size_mm": "0.6",
+            "life_seconds": "7200",
+            "notes": "Ready",
+            "metadata": {"vendor": "Bondtech"},
+        },
+        {"p1": {"id": "p1", "name": "Profile 1", "interval_hours": 10}},
+    )
+
+    assert error is None
+    assert payload == {
+        "name": "New Nozzle",
+        "profile_id": "p1",
+        "notes": "Ready",
+        "life_seconds": 7200,
+        "material": "hardened steel",
+        "size_mm": 0.6,
+        "metadata": {"vendor": "Bondtech"},
+    }
+
+
+def test_create_nozzle_payload_validation_rejects_bad_metadata_and_numbers():
+    payload, error = validate_create_nozzle_payload(
+        {
+            "name": "Bad Nozzle",
+            "profile_id": "p1",
+            "size_mm": 0,
+            "metadata": {"vendor": 5},
+        },
+        {"p1": {"id": "p1", "name": "Profile 1", "interval_hours": 10}},
+    )
+
+    assert payload is None
+    assert error == "size_mm must be a positive number"
+
+    payload, error = validate_create_nozzle_payload(
+        {
+            "name": "Bad Nozzle",
+            "profile_id": "p1",
+            "metadata": {"vendor": 5},
+        },
+        {"p1": {"id": "p1", "name": "Profile 1", "interval_hours": 10}},
+    )
+
+    assert payload is None
+    assert error == "metadata values must be strings"
+
+
+def test_existing_object_validation_rejects_missing_profile_and_nozzle():
+    profile_id, profile_error = validate_existing_profile_id("missing", {"p1": {"id": "p1"}})
+    nozzle_id, nozzle_error = validate_existing_nozzle_id("n2", {"n1": {"id": "n1"}})
+
+    assert profile_id is None
+    assert profile_error == "profile_id not found"
+    assert nozzle_id is None
+    assert nozzle_error == "nozzle_id not found"
+
+
+def test_add_nozzle_payload_validation_rejects_invalid_input():
+    payload, error = validate_add_nozzle_payload({"size": "", "material": "brass"})
+    assert payload is None
+    assert error == "size is required"
+
+    payload, error = validate_add_nozzle_payload({"size": True, "material": "brass"})
+    assert payload is None
+    assert error == "size must be a positive number"
+
+
+def test_metadata_field_validation_rejects_non_object():
+    metadata, error = validate_metadata_field("vendor=bondtech")
+
+    assert metadata is None
+    assert error == "metadata must be an object"
 
 
 def test_status_payload_includes_retired_flag_for_nozzles():

@@ -57,8 +57,13 @@ from .phase1_settings import (
     reset_tool_state,
     build_status_payload,
     normalize_tool_id,
+    validate_add_nozzle_payload,
     validate_unique_nozzle_assignments,
     validate_assign_nozzle_allowed,
+    validate_create_nozzle_payload,
+    validate_existing_nozzle_id,
+    validate_existing_profile_id,
+    validate_known_tool_id,
     validate_retire_nozzle_allowed,
     generate_nozzle_id,
     RETIRE_ASSIGNED_NOZZLE_MESSAGE,
@@ -75,7 +80,7 @@ from .runtime_state import (
 )
 
 __plugin_name__ = "Nozzle Life Tracker"
-__plugin_version__ = "0.3.7"
+__plugin_version__ = "0.3.8"
 __plugin_pythoncompat__ = ">=3.7,<3.12"
 __plugin_octoprint_version__ = ">=1.9,<2"
 
@@ -253,7 +258,7 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             output.headers["Content-Disposition"] = "attachment; filename=nozzle_log.csv"
             output.headers["Content-type"] = "text/csv"
             return output
-        return make_response("Unknown command", 400)
+        return self._api_error(command or "get", "Unknown command")
 
     def get_api_commands(self):
         return {
@@ -271,111 +276,114 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
             "export_log_csv": []
         }
 
+    def _api_error(self, command, message, status_code=400):
+        self._logger.debug("API %s rejected request: %s", command, message)
+        return jsonify({
+            "success": False,
+            "command": command,
+            "error": message,
+        }), status_code
+
     def on_api_command(self, command, data):
         data = data or {}
         if command == "status":
             return jsonify(self.get_api_status())
+        if not isinstance(data, dict):
+            return self._api_error(command, "Invalid request payload")
 
-        elif command == "set_tool_profile":
-            tool_id = normalize_tool_id(data.get("tool_id"))
-            profile_id = data.get("profile_id")
-            if not tool_id:
-                self._logger.debug("Phase1 API set_tool_profile invalid tool_id: %r", data.get("tool_id"))
-                return jsonify({"error": "Invalid tool_id"}), 400
-            if not profile_id:
-                self._logger.debug("Phase1 API set_tool_profile missing profile_id")
-                return jsonify({"error": "Missing profile_id"}), 400
-
+        if command == "set_tool_profile":
             with self._lock:
                 self._ensure_phase1_settings(save=False)
-                if profile_id not in self._nozzle_profiles:
-                    self._logger.debug("Phase1 API set_tool_profile unknown profile_id: %r", profile_id)
-                    return jsonify({"error": "Unknown profile_id"}), 400
+                tool_id, error = validate_known_tool_id(data.get("tool_id"), self._tool_state, self._tool_map)
+                if error:
+                    return self._api_error(command, error)
+                profile_id, error = validate_existing_profile_id(data.get("profile_id"), self._nozzle_profiles)
+                if error:
+                    return self._api_error(command, error)
 
             try:
                 self.set_tool_profile(tool_id, profile_id)
             except ValueError as exc:
-                self._logger.debug("Phase1 API set_tool_profile error: %s", exc)
-                return jsonify({"error": str(exc)}), 400
+                return self._api_error(command, str(exc))
 
             return jsonify(self.get_api_status())
 
-        elif command == "reset_tool":
-            tool_id = normalize_tool_id(data.get("tool_id"))
-            if not tool_id:
-                self._logger.debug("Phase1 API reset_tool invalid tool_id: %r", data.get("tool_id"))
-                return jsonify({"error": "Invalid tool_id"}), 400
+        if command == "reset_tool":
+            with self._lock:
+                self._ensure_phase1_settings(save=False)
+                tool_id, error = validate_known_tool_id(data.get("tool_id"), self._tool_state, self._tool_map)
+                if error:
+                    return self._api_error(command, error)
 
             try:
                 self.reset_tool(tool_id)
             except ValueError as exc:
-                self._logger.debug("Phase1 API reset_tool error: %s", exc)
-                return jsonify({"error": str(exc)}), 400
+                return self._api_error(command, str(exc))
 
             return jsonify(self.get_api_status())
 
         if command == "assign_nozzle":
-            tool_id = normalize_tool_id(data.get("tool_id"))
-            nozzle_id = str(data.get("nozzle_id") or "").strip()
-            if not tool_id:
-                return jsonify({"error": "Invalid tool_id"}), 400
-            if not nozzle_id:
-                return jsonify({"error": "Invalid nozzle_id"}), 400
+            with self._lock:
+                self._ensure_phase1_settings(save=False)
+                tool_id, error = validate_known_tool_id(data.get("tool_id"), self._tool_state, self._tool_map)
+                if error:
+                    return self._api_error(command, error)
+                nozzle_id, error = validate_existing_nozzle_id(data.get("nozzle_id"), self._nozzles)
+                if error:
+                    return self._api_error(command, error)
+                allowed, message = validate_assign_nozzle_allowed(tool_id, nozzle_id, self._nozzles, self._tool_map)
+                if not allowed:
+                    return self._api_error(command, message or "Invalid nozzle assignment")
             try:
                 self.assign_nozzle(tool_id, nozzle_id)
             except ValueError as exc:
-                self._logger.debug("Phase2 API assign_nozzle error: %s", exc)
-                return jsonify({"error": str(exc)}), 400
+                return self._api_error(command, str(exc))
             return jsonify(self.get_api_status())
 
-        elif command == "create_nozzle":
-            name = str(data.get("name") or "").strip()
-            profile_id = str(data.get("profile_id") or "").strip()
-            if not name:
-                return jsonify({"error": "Missing name"}), 400
-            if not profile_id:
-                return jsonify({"error": "Missing profile_id"}), 400
+        if command == "create_nozzle":
+            with self._lock:
+                self._ensure_phase1_settings(save=False)
+                payload, error = validate_create_nozzle_payload(data, self._nozzle_profiles)
+                if error:
+                    return self._api_error(command, error)
             try:
-                nozzle = self.create_nozzle(
-                    name=name,
-                    profile_id=profile_id,
-                    notes=data.get("notes"),
-                    life_seconds=data.get("life_seconds"),
-                    material=data.get("material"),
-                    size_mm=data.get("size_mm"),
-                    metadata=data.get("metadata"),
-                )
+                nozzle = self.create_nozzle(**payload)
             except ValueError as exc:
-                self._logger.debug("Phase2 API create_nozzle error: %s", exc)
-                return jsonify({"error": str(exc)}), 400
+                return self._api_error(command, str(exc))
             return jsonify({"success": True, "nozzle": nozzle})
 
-        elif command == "reset_nozzle":
-            nozzle_id = str(data.get("nozzle_id") or "").strip()
-            if not nozzle_id:
-                return jsonify({"error": "Invalid nozzle_id"}), 400
+        if command == "reset_nozzle":
+            with self._lock:
+                self._ensure_phase1_settings(save=False)
+                nozzle_id, error = validate_existing_nozzle_id(data.get("nozzle_id"), self._nozzles)
+                if error:
+                    return self._api_error(command, error)
             try:
                 self.reset_nozzle(nozzle_id)
             except ValueError as exc:
-                self._logger.debug("Phase2 API reset_nozzle error: %s", exc)
-                return jsonify({"error": str(exc)}), 400
+                return self._api_error(command, str(exc))
             return jsonify(self.get_api_status())
 
-        elif command == "select_nozzle":
+        if command == "select_nozzle":
             # Legacy alias for assigning nozzle to T0.
-            nozzle_id = str(data.get("nozzle_id") or "").strip()
-            if not nozzle_id:
-                return {"success": False, "error": "Invalid or retired nozzle."}
+            with self._lock:
+                self._ensure_phase1_settings(save=False)
+                nozzle_id, error = validate_existing_nozzle_id(data.get("nozzle_id"), self._nozzles)
+                if error:
+                    return self._api_error(command, error)
+                allowed, message = validate_assign_nozzle_allowed("T0", nozzle_id, self._nozzles, self._tool_map)
+                if not allowed:
+                    return self._api_error(command, message or "Invalid or retired nozzle.")
             try:
                 self.assign_nozzle("T0", nozzle_id)
-            except ValueError:
-                return {"success": False, "error": "Invalid or retired nozzle."}
+            except ValueError as exc:
+                return self._api_error(command, str(exc))
             self._current_nozzle = nozzle_id
             self._settings.set(["default_nozzle_id"], nozzle_id)
             self._settings.save()
             return {"success": True}
 
-        elif command == "get_status":
+        if command == "get_status":
             active_tool = self._active_tool_id or DEFAULT_TOOL_ID
             active_mapping = self._tool_map.get(active_tool) or {}
             active_nozzle_id = active_mapping.get("active_nozzle_id")
@@ -390,41 +398,51 @@ class NozzleLifeTrackerPlugin(StartupPlugin,
                 "display_mode": self._settings.get(["display_mode"])
             }
 
-        elif command == "get_log":
+        if command == "get_log":
             return {"log": self._print_log}
 
-        elif command == "retire_nozzle":
-            nozzle_id = data.get("nozzle_id")
+        if command == "retire_nozzle":
+            with self._lock:
+                self._ensure_phase1_settings(save=False)
+                nozzle_id, error = validate_existing_nozzle_id(data.get("nozzle_id"), self._nozzles)
+                if error:
+                    return self._api_error(command, error)
+                allowed, message = validate_retire_nozzle_allowed(nozzle_id, self._tool_map)
+                if not allowed:
+                    return self._api_error(command, message or RETIRE_ASSIGNED_NOZZLE_MESSAGE)
             try:
                 self.retire_nozzle(nozzle_id)
             except ValueError as exc:
-                return {"success": False, "error": str(exc)}
+                return self._api_error(command, str(exc))
             return {"success": True}
 
-        elif command == "add_nozzle":
+        if command == "add_nozzle":
             # Legacy alias: map old add_nozzle semantics into Phase 2 create_nozzle.
-            size = data.get("size")
-            material = data.get("material") or "brass"
-            default_name = "{} {} #{}".format(size or "0.4", material, len(self._nozzles) + 1)
+            with self._lock:
+                self._ensure_phase1_settings(save=False)
+                payload, error = validate_add_nozzle_payload(data)
+                if error:
+                    return self._api_error(command, error)
+                default_name = "{} {} #{}".format(payload["size"], payload["material"], len(self._nozzles) + 1)
             try:
                 nozzle = self.create_nozzle(
                     name=default_name,
                     profile_id=DEFAULT_PROFILE_ID,
-                    material=material,
-                    size_mm=size if size is not None else 0.4,
+                    material=payload["material"],
+                    size_mm=payload["size"],
                 )
             except ValueError as exc:
-                return {"success": False, "error": str(exc)}
+                return self._api_error(command, str(exc))
             return {"success": True, "nozzle_id": nozzle["id"], "name": nozzle["name"]}
 
-        elif command == "export_log_csv":
+        if command == "export_log_csv":
             output = make_response(self._generate_csv())
             output.headers["Content-Disposition"] = "attachment; filename=nozzle_log.csv"
             output.headers["Content-type"] = "text/csv"
             return output
 
         self._logger.debug("Unknown API command: %r", command)
-        return jsonify({"error": "Unknown command"}), 400
+        return self._api_error(command, "Unknown command")
 
     def _generate_csv(self):
         import io
